@@ -4,14 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Pallet is a framework for building and orchestrating AI agents using Google's A2A (Agent-to-Agent) protocol. Phase 2 implements three minimal agents (Plan, Build, Test) that communicate via FastAPI and JSON-RPC 2.0, with each agent using Claude API for AI processing.
+Pallet is a framework for building and orchestrating AI agents using Google's A2A (Agent-to-Agent) protocol. Phase 2 implements three minimal agents (Plan, Build, Test) that communicate via FastAPI and JSON-RPC 2.0. Each agent invokes Claude API via subprocess using the Claude CLI tool.
 
 ## Common Development Commands
 
 ### Setup
 ```bash
-# Install dependencies using uv
+# Install Python dependencies using uv
 uv sync
+
+# Install Claude CLI (required for agents to invoke Claude API)
+npm install -g @anthropic-ai/claude-cli
+
+# Set API key environment variable
+export ANTHROPIC_API_KEY="your-api-key-here"
 ```
 
 ### Bootstrap the System (Recommended)
@@ -89,7 +95,10 @@ But this requires manual registry setup. Use `bash scripts/bootstrap.sh` for eas
 
 ### Environment Setup
 ```bash
-# Required for Claude API access
+# Install Claude CLI (if not already installed)
+npm install -g @anthropic-ai/claude-cli
+
+# Required for Claude API access (used by claude CLI)
 export ANTHROPIC_API_KEY="your-api-key-here"
 ```
 

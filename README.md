@@ -47,7 +47,14 @@ This means you can add/replace agents without modifying the orchestrator—just 
 #### 1. Install Dependencies
 
 ```bash
+# Install Python dependencies with uv
 uv sync
+
+# Install Claude CLI (if not already installed)
+# See: https://github.com/anthropics/claude-cli
+npm install -g @anthropic-ai/claude-cli
+
+# Set up Claude API credentials
 export ANTHROPIC_API_KEY="your-api-key-here"
 ```
 
@@ -167,7 +174,7 @@ The agents communicate via Google's A2A protocol:
 Each agent:
 - Has one or more skills defined in its agent card
 - Inherits from `BaseAgent` class
-- Uses Anthropic's Claude API for AI processing
+- Invokes Claude API via CLI subprocess (`claude` command)
 - Exposes `/agent-card` endpoint for A2A protocol compliance
 
 ### Project Structure
@@ -212,11 +219,16 @@ app/                       # Generated code output folder
 ### Dependencies
 
 - **fastapi**: Web framework for agents
-- **anthropic**: Claude API client
+- **uvicorn**: ASGI server for FastAPI
 - **httpx**: Async HTTP client for agent communication
 - **pydantic**: Data validation
 - **oras**: OCI Registry as Storage (for pulling agent cards)
 - **docker**: For running the OCI registry
+
+### System Requirements
+
+- **claude** CLI: Must be installed and in PATH for agents to invoke Claude API
+- **ANTHROPIC_API_KEY**: Environment variable with valid Claude API key (for claude CLI)
 
 ### For More Information
 
