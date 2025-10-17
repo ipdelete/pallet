@@ -1,0 +1,58 @@
+{
+  "name": "plan-agent",
+  "url": "http://localhost:8001",
+  "skills": [
+    {
+      "id": "create_plan",
+      "description": "Creates a structured implementation plan from requirements",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "requirements": {
+            "type": "string",
+            "description": "User requirements or feature description"
+          }
+        },
+        "required": ["requirements"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the plan"
+          },
+          "steps": {
+            "type": "array",
+            "description": "Implementation steps",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Step name"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Step description"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "Estimated time"
+                }
+              }
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "description": "External dependencies"
+          },
+          "estimated_total_time": {
+            "type": "string",
+            "description": "Total estimated time"
+          }
+        }
+      }
+    }
+  ]
+}

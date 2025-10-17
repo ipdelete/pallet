@@ -1,0 +1,49 @@
+{
+  "name": "test-agent",
+  "url": "http://localhost:8003",
+  "skills": [
+    {
+      "id": "review_code",
+      "description": "Reviews code for quality, bugs, and best practices",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code to review"
+          },
+          "language": {
+            "type": "string",
+            "description": "Programming language (default: python)"
+          }
+        },
+        "required": ["code"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "quality_score": {
+            "type": "number",
+            "description": "Code quality score (1-10)"
+          },
+          "issues": {
+            "type": "array",
+            "description": "Issues found in the code"
+          },
+          "suggestions": {
+            "type": "array",
+            "description": "Suggestions for improvement"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Is code production-ready"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Summary of the review"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "build-agent",
+  "url": "http://localhost:8002",
+  "skills": [
+    {
+      "id": "generate_code",
+      "description": "Generates Python code based on an implementation plan",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "object",
+            "description": "Implementation plan from Plan Agent"
+          }
+        },
+        "required": ["plan"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Generated Python code"
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Explanation of the implementation"
+          },
+          "language": {
+            "type": "string",
+            "description": "Programming language (python)"
+          },
+          "functions": {
+            "type": "array",
+            "description": "Functions/classes defined in the code"
+          }
+        }
+      }
+    }
+  ]
+}
