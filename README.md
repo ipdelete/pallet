@@ -1,13 +1,14 @@
- ╔════════════════════════════════════════════════════╗
- ║                                                    ║
- ║                    P A L L E T                    ║
- ║            AI Agent Framework                     ║
- ║      Build & Orchestrate Intelligent Agents      ║
- ║                                                    ║
- ║  Google A2A Protocol  •  Dynamic Discovery       ║
- ║            JSON-RPC 2.0  •  FastAPI              ║
- ║                                                    ║
- ╚════════════════════════════════════════════════════╝
+```
+    ____        _ _      _
+   |  _ \ __ _| | | ___| |_
+   | |_) / _` | | |/ _ \ __|
+   |  __/ (_| | | |  __/ |_
+   |_|   \__,_|_|_|\___|\__|
+
+   AI Agent Framework
+   Google A2A Protocol • Dynamic Discovery
+   JSON-RPC 2.0 • FastAPI
+```
 
 # Pallet - A2A Agent Framework
 
