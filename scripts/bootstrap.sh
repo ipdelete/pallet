@@ -363,16 +363,12 @@ LOGS & DEBUGGING:
 
 STOPPING THE SYSTEM:
 
-  Stop all agents (they'll keep running in background):
-    pkill -f "src.agents.*_agent"
+  Stop all services and clean up:
+    bash scripts/kill.sh              # Keep logs for debugging
+    bash scripts/kill.sh --clean-logs # Also remove logs
 
-  Stop the registry:
-    docker stop local-registry
-
-  Clean up completely:
-    pkill -f "src.agents.*_agent"
-    docker stop local-registry
-    docker rm local-registry
+  For more options, see:
+    bash scripts/kill.sh --help
 
 ═══════════════════════════════════════════════════════════════════
 
