@@ -144,9 +144,25 @@ check_dependencies() {
 start_registry() {
     log_info "Starting OCI registry..."
 
-    # Use the Python registry startup script
-    cd "$PALLET_ROOT"
-    uv run python src/run_local_registry.py
+    local registry_name="local-registry"
+    local registry_port="5000"
+    local registry_image="registry:2"
+
+    # Check if container is already running
+    if docker ps --filter "name=$registry_name" --format "{{.Names}}" | grep -q "$registry_name"; then
+        log_success "Registry container is already running"
+    else
+        # Remove stopped container if it exists
+        if docker ps -a --filter "name=$registry_name" --format "{{.Names}}" | grep -q "$registry_name"; then
+            log_info "Removing stopped registry container..."
+            docker rm "$registry_name" > /dev/null 2>&1 || true
+        fi
+
+        # Start new registry container
+        log_info "Starting registry container..."
+        docker run -d -p "$registry_port:5000" --name "$registry_name" "$registry_image" > /dev/null 2>&1
+        sleep 1
+    fi
 
     # Wait for registry to be ready
     log_info "Waiting for registry to be ready..."
