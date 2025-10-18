@@ -1,10 +1,7 @@
 """Base agent class for A2A protocol implementation."""
 
-import os
-import json
-import logging
 import asyncio
-import subprocess
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
@@ -18,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class Message(BaseModel):
     """A2A Message structure."""
+
     jsonrpc: str = "2.0"
     method: str
     params: Dict[str, Any]
@@ -26,6 +24,7 @@ class Message(BaseModel):
 
 class SkillDefinition(BaseModel):
     """Skill definition for Agent Card."""
+
     id: str
     description: str
     input_schema: Optional[Dict[str, Any]] = None
@@ -34,6 +33,7 @@ class SkillDefinition(BaseModel):
 
 class AgentCard(BaseModel):
     """Agent Card for A2A protocol."""
+
     name: str
     url: str
     skills: list[SkillDefinition]
@@ -65,6 +65,7 @@ class BaseAgent(ABC):
 
     def _setup_routes(self):
         """Setup FastAPI routes."""
+
         @self.app.get("/agent-card")
         async def get_agent_card():
             """Get the agent card with capabilities."""
@@ -79,7 +80,7 @@ class BaseAgent(ABC):
                         "output_schema": skill.output_schema,
                     }
                     for skill in self.skills
-                ]
+                ],
             }
 
         @self.app.post("/execute")
@@ -90,8 +91,7 @@ class BaseAgent(ABC):
                 skill_ids = [skill.id for skill in self.skills]
                 if message.method not in skill_ids:
                     raise HTTPException(
-                        status_code=404,
-                        detail=f"Unknown skill: {message.method}"
+                        status_code=404, detail=f"Unknown skill: {message.method}"
                     )
 
                 # Execute the skill
@@ -160,7 +160,8 @@ class BaseAgent(ABC):
             return stdout.decode().strip()
         except FileNotFoundError:
             raise RuntimeError(
-                "Claude code CLI not found. Make sure 'claude' is installed and in PATH."
+                "Claude code CLI not found. "
+                "Make sure 'claude' is installed and in PATH."
             )
         except Exception as e:
             raise RuntimeError(f"Error calling Claude code CLI: {e}")
@@ -190,9 +191,7 @@ class BaseAgent(ABC):
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{agent_url}/execute",
-                json=message,
-                timeout=30.0
+                f"{agent_url}/execute", json=message, timeout=30.0
             )
             response.raise_for_status()
             return response.json()
@@ -204,4 +203,5 @@ class BaseAgent(ABC):
             host: Host to bind to
         """
         import uvicorn
+
         uvicorn.run(self.app, host=host, port=self.port)

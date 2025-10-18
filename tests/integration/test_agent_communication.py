@@ -11,7 +11,7 @@ from tests.fixtures.sample_data import (
     REQUIREMENTS_EMAIL_VALIDATOR,
     PLAN_EMAIL_VALIDATOR,
     CODE_RESULT_EMAIL,
-    REVIEW_GOOD
+    REVIEW_GOOD,
 )
 
 
@@ -25,11 +25,7 @@ class TestAgentToAgentCalls:
         agent2 = BuildAgent()
 
         # Mock the HTTP client to simulate agent communication
-        mock_response = {
-            "jsonrpc": "2.0",
-            "result": CODE_RESULT_EMAIL,
-            "id": "1"
-        }
+        mock_response = {"jsonrpc": "2.0", "result": CODE_RESULT_EMAIL, "id": "1"}
 
         mock_http_response = Mock()
         mock_http_response.json = Mock(return_value=mock_response)
@@ -40,11 +36,11 @@ class TestAgentToAgentCalls:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             result = await agent1.call_agent_skill(
                 agent_url="http://localhost:8002",
                 skill_id="generate_code",
-                params={"plan": PLAN_EMAIL_VALIDATOR}
+                params={"plan": PLAN_EMAIL_VALIDATOR},
             )
 
             assert result["jsonrpc"] == "2.0"
@@ -57,11 +53,9 @@ class TestAgentToAgentCalls:
         agent = PlanAgent()
 
         mock_response = Mock()
-        mock_response.json = Mock(return_value={
-            "jsonrpc": "2.0",
-            "result": {},
-            "id": "1"
-        })
+        mock_response.json = Mock(
+            return_value={"jsonrpc": "2.0", "result": {}, "id": "1"}
+        )
         mock_response.raise_for_status = Mock()
 
         mock_client = Mock()
@@ -69,11 +63,11 @@ class TestAgentToAgentCalls:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             await agent.call_agent_skill(
                 agent_url="http://localhost:8002",
                 skill_id="test_skill",
-                params={"key": "value"}
+                params={"key": "value"},
             )
 
             # Verify the POST request was made with correct structure
@@ -96,11 +90,12 @@ class TestPipelineCommunication:
 
         # Mock Plan Agent's Claude call
         plan_json = json.dumps(PLAN_EMAIL_VALIDATOR)
-        with patch.object(plan_agent, 'call_claude', new=AsyncMock(return_value=plan_json)):
+        with patch.object(
+            plan_agent, "call_claude", new=AsyncMock(return_value=plan_json)
+        ):
             # Execute Plan Agent
             plan = await plan_agent.execute_skill(
-                "create_plan",
-                {"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
+                "create_plan", {"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
             )
 
             # Verify plan can be passed to Build Agent
@@ -111,10 +106,11 @@ class TestPipelineCommunication:
             build_agent = BuildAgent()
             code_json = json.dumps(CODE_RESULT_EMAIL)
 
-            with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=code_json)):
+            with patch.object(
+                build_agent, "call_claude", new=AsyncMock(return_value=code_json)
+            ):
                 code_result = await build_agent.execute_skill(
-                    "generate_code",
-                    {"plan": plan}  # Plan output becomes Build input
+                    "generate_code", {"plan": plan}  # Plan output becomes Build input
                 )
 
                 assert "code" in code_result
@@ -127,11 +123,12 @@ class TestPipelineCommunication:
 
         # Mock Build Agent's Claude call
         code_json = json.dumps(CODE_RESULT_EMAIL)
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=code_json)):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value=code_json)
+        ):
             # Execute Build Agent
             code_result = await build_agent.execute_skill(
-                "generate_code",
-                {"plan": PLAN_EMAIL_VALIDATOR}
+                "generate_code", {"plan": PLAN_EMAIL_VALIDATOR}
             )
 
             # Verify code can be passed to Test Agent
@@ -142,13 +139,15 @@ class TestPipelineCommunication:
             test_agent = TestAgent()
             review_json = json.dumps(REVIEW_GOOD)
 
-            with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value=review_json)):
+            with patch.object(
+                test_agent, "call_claude", new=AsyncMock(return_value=review_json)
+            ):
                 review = await test_agent.execute_skill(
                     "review_code",
                     {
                         "code": code_result["code"],  # Build output becomes Test input
-                        "language": code_result["language"]
-                    }
+                        "language": code_result["language"],
+                    },
                 )
 
                 assert "quality_score" in review
@@ -161,33 +160,34 @@ class TestPipelineCommunication:
         plan_agent = PlanAgent()
         plan_json = json.dumps(PLAN_EMAIL_VALIDATOR)
 
-        with patch.object(plan_agent, 'call_claude', new=AsyncMock(return_value=plan_json)):
+        with patch.object(
+            plan_agent, "call_claude", new=AsyncMock(return_value=plan_json)
+        ):
             plan = await plan_agent.execute_skill(
-                "create_plan",
-                {"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
+                "create_plan", {"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
             )
 
         # Step 2: Build Agent (receives plan)
         build_agent = BuildAgent()
         code_json = json.dumps(CODE_RESULT_EMAIL)
 
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=code_json)):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value=code_json)
+        ):
             code_result = await build_agent.execute_skill(
-                "generate_code",
-                {"plan": plan}
+                "generate_code", {"plan": plan}
             )
 
         # Step 3: Test Agent (receives code)
         test_agent = TestAgent()
         review_json = json.dumps(REVIEW_GOOD)
 
-        with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value=review_json)):
+        with patch.object(
+            test_agent, "call_claude", new=AsyncMock(return_value=review_json)
+        ):
             review = await test_agent.execute_skill(
                 "review_code",
-                {
-                    "code": code_result["code"],
-                    "language": code_result["language"]
-                }
+                {"code": code_result["code"], "language": code_result["language"]},
             )
 
         # Verify end-to-end data flow
@@ -213,12 +213,10 @@ class TestErrorHandling:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(Exception, match="Connection refused"):
                 await agent.call_agent_skill(
-                    agent_url="http://localhost:9999",
-                    skill_id="test_skill",
-                    params={}
+                    agent_url="http://localhost:9999", skill_id="test_skill", params={}
                 )
 
     @pytest.mark.asyncio
@@ -236,12 +234,10 @@ class TestErrorHandling:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             # Should still return the response even if format is unexpected
             result = await agent.call_agent_skill(
-                agent_url="http://localhost:8002",
-                skill_id="test_skill",
-                params={}
+                agent_url="http://localhost:8002", skill_id="test_skill", params={}
             )
 
             # Response is returned as-is
@@ -257,11 +253,9 @@ class TestTimeout:
         agent = PlanAgent()
 
         mock_response = Mock()
-        mock_response.json = Mock(return_value={
-            "jsonrpc": "2.0",
-            "result": {},
-            "id": "1"
-        })
+        mock_response.json = Mock(
+            return_value={"jsonrpc": "2.0", "result": {}, "id": "1"}
+        )
         mock_response.raise_for_status = Mock()
 
         mock_client = Mock()
@@ -269,11 +263,9 @@ class TestTimeout:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             await agent.call_agent_skill(
-                agent_url="http://localhost:8002",
-                skill_id="test_skill",
-                params={}
+                agent_url="http://localhost:8002", skill_id="test_skill", params={}
             )
 
             # Verify timeout was passed (default 30.0)

@@ -14,16 +14,18 @@ class PlanAgent(BaseAgent):
         skills = [
             SkillDefinition(
                 id="create_plan",
-                description="Creates a structured implementation plan from requirements",
+                description=(
+                    "Creates a structured implementation plan from requirements"
+                ),
                 input_schema={
                     "type": "object",
                     "properties": {
                         "requirements": {
                             "type": "string",
-                            "description": "User requirements or feature description"
+                            "description": "User requirements or feature description",
                         }
                     },
-                    "required": ["requirements"]
+                    "required": ["requirements"],
                 },
                 output_schema={
                     "type": "object",
@@ -36,14 +38,14 @@ class PlanAgent(BaseAgent):
                                 "properties": {
                                     "name": {"type": "string"},
                                     "description": {"type": "string"},
-                                    "time": {"type": "string"}
-                                }
-                            }
+                                    "time": {"type": "string"},
+                                },
+                            },
                         },
                         "dependencies": {"type": "array"},
-                        "estimated_total_time": {"type": "string"}
-                    }
-                }
+                        "estimated_total_time": {"type": "string"},
+                    },
+                },
             )
         ]
         super().__init__(name="plan-agent", port=8001, skills=skills)
@@ -63,13 +65,15 @@ class PlanAgent(BaseAgent):
 
         Return a JSON object with:
         - title: Brief title of the project/feature
-        - steps: Array of implementation steps, each with name, description, and time estimate
+        - steps: Array of implementation steps, each with name, description,
+                 and time estimate
         - dependencies: List of external dependencies needed
         - estimated_total_time: Total estimated time for the implementation
 
         Be specific and practical in your planning."""
 
-        user_message = f"""Please create an implementation plan for the following requirements:
+        user_message = f"""Please create an implementation plan for the
+        following requirements:
 
 {requirements}
 
@@ -94,7 +98,7 @@ Return ONLY the JSON object, no additional text."""
             return {
                 "title": "Implementation Plan",
                 "raw_response": response,
-                "error": f"Failed to parse response as JSON: {e}"
+                "error": f"Failed to parse response as JSON: {e}",
             }
 
 

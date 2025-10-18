@@ -10,7 +10,7 @@ from tests.fixtures.sample_data import (
     CODE_EMAIL_VALIDATOR,
     CODE_FIBONACCI,
     REVIEW_GOOD,
-    REVIEW_POOR
+    REVIEW_POOR,
 )
 
 
@@ -82,10 +82,11 @@ class TestExecuteSkill:
     async def test_execute_review_code_success(self, test_agent):
         """Test successful code review."""
         review_json = json.dumps(REVIEW_GOOD)
-        with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value=review_json)):
+        with patch.object(
+            test_agent, "call_claude", new=AsyncMock(return_value=review_json)
+        ):
             result = await test_agent.execute_skill(
-                "review_code",
-                {"code": CODE_EMAIL_VALIDATOR, "language": "python"}
+                "review_code", {"code": CODE_EMAIL_VALIDATOR, "language": "python"}
             )
 
             assert "quality_score" in result
@@ -98,10 +99,11 @@ class TestExecuteSkill:
     async def test_execute_review_code_default_language(self, test_agent):
         """Test code review with default language (python)."""
         review_json = json.dumps(REVIEW_GOOD)
-        with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value=review_json)):
+        with patch.object(
+            test_agent, "call_claude", new=AsyncMock(return_value=review_json)
+        ):
             result = await test_agent.execute_skill(
-                "review_code",
-                {"code": CODE_EMAIL_VALIDATOR}
+                "review_code", {"code": CODE_EMAIL_VALIDATOR}
             )
 
             assert "quality_score" in result
@@ -110,10 +112,11 @@ class TestExecuteSkill:
     async def test_execute_review_poor_code(self, test_agent):
         """Test review of poor quality code."""
         review_json = json.dumps(REVIEW_POOR)
-        with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value=review_json)):
+        with patch.object(
+            test_agent, "call_claude", new=AsyncMock(return_value=review_json)
+        ):
             result = await test_agent.execute_skill(
-                "review_code",
-                {"code": "bad code", "language": "python"}
+                "review_code", {"code": "bad code", "language": "python"}
             )
 
             assert result["quality_score"] == 4
@@ -135,10 +138,11 @@ class TestExecuteSkill:
     @pytest.mark.asyncio
     async def test_execute_with_invalid_json_response(self, test_agent):
         """Test code review with invalid JSON response."""
-        with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value="Not valid JSON")):
+        with patch.object(
+            test_agent, "call_claude", new=AsyncMock(return_value="Not valid JSON")
+        ):
             result = await test_agent.execute_skill(
-                "review_code",
-                {"code": CODE_EMAIL_VALIDATOR}
+                "review_code", {"code": CODE_EMAIL_VALIDATOR}
             )
 
             # Should return fallback structure
@@ -156,10 +160,9 @@ class TestClaudeIntegration:
         """Test that execute_skill calls Claude with the code."""
         mock_claude = AsyncMock(return_value=json.dumps(REVIEW_GOOD))
 
-        with patch.object(test_agent, 'call_claude', mock_claude):
+        with patch.object(test_agent, "call_claude", mock_claude):
             await test_agent.execute_skill(
-                "review_code",
-                {"code": CODE_EMAIL_VALIDATOR, "language": "python"}
+                "review_code", {"code": CODE_EMAIL_VALIDATOR, "language": "python"}
             )
 
             # Verify Claude was called
@@ -175,18 +178,19 @@ class TestClaudeIntegration:
             assert "python" in system_prompt.lower()
 
             # User message should include the code
-            assert CODE_EMAIL_VALIDATOR in user_message or "review" in user_message.lower()
+            assert (
+                CODE_EMAIL_VALIDATOR in user_message or "review" in user_message.lower()
+            )
 
     @pytest.mark.asyncio
     async def test_supports_multiple_languages(self, test_agent):
         """Test that review supports different languages."""
         mock_claude = AsyncMock(return_value=json.dumps(REVIEW_GOOD))
 
-        with patch.object(test_agent, 'call_claude', mock_claude):
+        with patch.object(test_agent, "call_claude", mock_claude):
             # Test with JavaScript
             await test_agent.execute_skill(
-                "review_code",
-                {"code": "function test() {}", "language": "javascript"}
+                "review_code", {"code": "function test() {}", "language": "javascript"}
             )
 
             call_args = mock_claude.call_args[0]
@@ -201,15 +205,14 @@ class TestEndToEndExecution:
         """Test reviewing code via HTTP POST."""
         mock_response = json.dumps(REVIEW_GOOD)
 
-        with patch.object(test_agent, 'call_claude', new=AsyncMock(return_value=mock_response)):
+        with patch.object(
+            test_agent, "call_claude", new=AsyncMock(return_value=mock_response)
+        ):
             message = {
                 "jsonrpc": "2.0",
                 "method": "review_code",
-                "params": {
-                    "code": CODE_EMAIL_VALIDATOR,
-                    "language": "python"
-                },
-                "id": "test-123"
+                "params": {"code": CODE_EMAIL_VALIDATOR, "language": "python"},
+                "id": "test-123",
             }
 
             response = test_client.post("/execute", json=message)
@@ -228,7 +231,7 @@ class TestEndToEndExecution:
             "jsonrpc": "2.0",
             "method": "review_code",
             "params": {},
-            "id": "test-456"
+            "id": "test-456",
         }
 
         response = test_client.post("/execute", json=message)

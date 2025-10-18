@@ -6,10 +6,8 @@ No error handling, retries, or state management.
 Saves results to app/ folder.
 """
 
-import asyncio
 import json
 import os
-import sys
 from typing import Optional
 from datetime import datetime
 
@@ -21,10 +19,7 @@ REGISTRY_URL = "http://localhost:5000"
 
 
 async def call_agent_skill(
-    agent_url: str,
-    skill_id: str,
-    params: dict,
-    timeout: float = 60.0
+    agent_url: str, skill_id: str, params: dict, timeout: float = 60.0
 ) -> dict:
     """Call an agent's skill via JSON-RPC over HTTP.
 
@@ -46,9 +41,7 @@ async def call_agent_skill(
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{agent_url}/execute",
-            json=message,
-            timeout=timeout
+            f"{agent_url}/execute", json=message, timeout=timeout
         )
         response.raise_for_status()
         return response.json()
@@ -62,7 +55,9 @@ def ensure_app_folder():
     return app_dir
 
 
-def save_results(app_dir: str, plan: dict, code_result: dict, review: dict, requirements: str):
+def save_results(
+    app_dir: str, plan: dict, code_result: dict, review: dict, requirements: str
+):
     """Save orchestration results to app/ folder.
 
     Args:
@@ -92,16 +87,16 @@ def save_results(app_dir: str, plan: dict, code_result: dict, review: dict, requ
         "code_language": code_result.get("language", "python"),
         "code_functions": len(code_result.get("functions", [])),
         "quality_score": review.get("quality_score", 0),
-        "approved": review.get("approved", False)
+        "approved": review.get("approved", False),
     }
     with open(os.path.join(app_dir, "metadata.json"), "w") as f:
         json.dump(metadata, f, indent=2)
 
     print(f"\n✓ Results saved to {app_dir}/")
-    print(f"  - main.py (generated code)")
-    print(f"  - plan.json (implementation plan)")
-    print(f"  - review.json (code review)")
-    print(f"  - metadata.json (pipeline metadata)")
+    print("  - main.py (generated code)")
+    print("  - plan.json (implementation plan)")
+    print("  - review.json (code review)")
+    print("  - metadata.json (pipeline metadata)")
 
 
 async def orchestrate(requirements: str) -> None:
@@ -142,9 +137,7 @@ async def orchestrate(requirements: str) -> None:
     print(f"Requirements: {requirements}\n")
 
     plan_response = await call_agent_skill(
-        plan_agent_url,
-        "create_plan",
-        {"requirements": requirements}
+        plan_agent_url, "create_plan", {"requirements": requirements}
     )
     plan = plan_response["result"]
 
@@ -157,9 +150,7 @@ async def orchestrate(requirements: str) -> None:
     print("-" * 70)
 
     code_response = await call_agent_skill(
-        build_agent_url,
-        "generate_code",
-        {"plan": plan}
+        build_agent_url, "generate_code", {"plan": plan}
     )
     code_result = code_response["result"]
     code = code_result.get("code", "")
@@ -180,10 +171,7 @@ async def orchestrate(requirements: str) -> None:
     review_response = await call_agent_skill(
         test_agent_url,
         "review_code",
-        {
-            "code": code,
-            "language": code_result.get("language", "python")
-        }
+        {"code": code, "language": code_result.get("language", "python")},
     )
     review = review_response["result"]
 

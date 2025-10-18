@@ -20,10 +20,10 @@ class BuildAgent(BaseAgent):
                     "properties": {
                         "plan": {
                             "type": "object",
-                            "description": "Implementation plan from Plan Agent"
+                            "description": "Implementation plan from Plan Agent",
                         }
                     },
-                    "required": ["plan"]
+                    "required": ["plan"],
                 },
                 output_schema={
                     "type": "object",
@@ -31,9 +31,9 @@ class BuildAgent(BaseAgent):
                         "code": {"type": "string"},
                         "explanation": {"type": "string"},
                         "language": {"type": "string"},
-                        "functions": {"type": "array"}
-                    }
-                }
+                        "functions": {"type": "array"},
+                    },
+                },
             )
         ]
         super().__init__(name="build-agent", port=8002, skills=skills)
@@ -92,7 +92,7 @@ Return ONLY the JSON object, no additional text."""
                 "code": response,
                 "explanation": "Generated code from plan",
                 "language": "python",
-                "error": f"Failed to parse response as JSON: {e}"
+                "error": f"Failed to parse response as JSON: {e}",
             }
 
 

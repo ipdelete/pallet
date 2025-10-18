@@ -9,13 +9,13 @@ from src.discovery import (
     SkillInfo,
     discover_agent,
     discover_agents,
-    list_skills
+    list_skills,
 )
 from tests.fixtures.sample_data import (
     REGISTRY_CATALOG,
     PLAN_AGENT_CARD,
     BUILD_AGENT_CARD,
-    TEST_AGENT_CARD
+    TEST_AGENT_CARD,
 )
 
 
@@ -41,7 +41,7 @@ class TestAgentInfo:
             name="test-agent",
             url="http://localhost:8001",
             skills=[{"id": "test_skill"}],
-            tag="v1"
+            tag="v1",
         )
         assert info.name == "test-agent"
         assert info.url == "http://localhost:8001"
@@ -58,7 +58,7 @@ class TestSkillInfo:
             id="test_skill",
             description="A test skill",
             agent_name="test-agent",
-            agent_url="http://localhost:8001"
+            agent_url="http://localhost:8001",
         )
         assert info.id == "test_skill"
         assert info.description == "A test skill"
@@ -90,7 +90,7 @@ class TestListRepositories:
         mock_response.json.return_value = REGISTRY_CATALOG
         mock_response.raise_for_status = Mock()
 
-        with patch.object(registry_discovery.client, 'get', return_value=mock_response):
+        with patch.object(registry_discovery.client, "get", return_value=mock_response):
             repos = registry_discovery.list_repositories()
 
             assert len(repos) == 3
@@ -100,7 +100,9 @@ class TestListRepositories:
 
     def test_list_repositories_failure(self, registry_discovery):
         """Test repository listing failure."""
-        with patch.object(registry_discovery.client, 'get', side_effect=Exception("Connection error")):
+        with patch.object(
+            registry_discovery.client, "get", side_effect=Exception("Connection error")
+        ):
             repos = registry_discovery.list_repositories()
 
             assert repos == []
@@ -116,7 +118,7 @@ class TestListTags:
         mock_response.json.return_value = {"tags": ["v1", "v2", "latest"]}
         mock_response.raise_for_status = Mock()
 
-        with patch.object(registry_discovery.client, 'get', return_value=mock_response):
+        with patch.object(registry_discovery.client, "get", return_value=mock_response):
             tags = registry_discovery.list_tags("agents/plan")
 
             assert len(tags) == 3
@@ -125,7 +127,9 @@ class TestListTags:
 
     def test_list_tags_failure(self, registry_discovery):
         """Test tag listing failure."""
-        with patch.object(registry_discovery.client, 'get', side_effect=Exception("Connection error")):
+        with patch.object(
+            registry_discovery.client, "get", side_effect=Exception("Connection error")
+        ):
             tags = registry_discovery.list_tags("agents/plan")
 
             assert tags == []
@@ -144,11 +148,13 @@ class TestGetAgentCard:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch('subprocess.run', return_value=mock_result):
-            with patch('os.path.exists', return_value=True):
-                with patch('builtins.open', create=True) as mock_open:
-                    mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(PLAN_AGENT_CARD)
-                    with patch('json.load', return_value=PLAN_AGENT_CARD):
+        with patch("subprocess.run", return_value=mock_result):
+            with patch("os.path.exists", return_value=True):
+                with patch("builtins.open", create=True) as mock_open:
+                    mock_open.return_value.__enter__.return_value.read.return_value = (
+                        json.dumps(PLAN_AGENT_CARD)
+                    )
+                    with patch("json.load", return_value=PLAN_AGENT_CARD):
                         card = registry_discovery.get_agent_card("plan")
 
                         assert card is not None
@@ -161,7 +167,7 @@ class TestGetAgentCard:
         mock_result.returncode = 1
         mock_result.stderr = "ORAS pull failed"
 
-        with patch('subprocess.run', return_value=mock_result):
+        with patch("subprocess.run", return_value=mock_result):
             card = registry_discovery.get_agent_card("plan")
 
             assert card is None
@@ -171,8 +177,8 @@ class TestGetAgentCard:
         mock_result = Mock()
         mock_result.returncode = 0
 
-        with patch('subprocess.run', return_value=mock_result):
-            with patch('os.path.exists', return_value=False):
+        with patch("subprocess.run", return_value=mock_result):
+            with patch("os.path.exists", return_value=False):
                 card = registry_discovery.get_agent_card("plan")
 
                 assert card is None
@@ -183,9 +189,17 @@ class TestDiscoverAllAgents:
 
     def test_discover_all_agents_success(self, registry_discovery):
         """Test successful discovery of all agents."""
-        with patch.object(registry_discovery, 'list_repositories', return_value=["agents/plan", "agents/build"]):
-            with patch.object(registry_discovery, 'list_tags', return_value=["v1"]):
-                with patch.object(registry_discovery, 'get_agent_card', side_effect=[PLAN_AGENT_CARD, BUILD_AGENT_CARD]):
+        with patch.object(
+            registry_discovery,
+            "list_repositories",
+            return_value=["agents/plan", "agents/build"],
+        ):
+            with patch.object(registry_discovery, "list_tags", return_value=["v1"]):
+                with patch.object(
+                    registry_discovery,
+                    "get_agent_card",
+                    side_effect=[PLAN_AGENT_CARD, BUILD_AGENT_CARD],
+                ):
                     agents = registry_discovery.discover_all_agents()
 
                     assert len(agents) == 2
@@ -197,8 +211,12 @@ class TestDiscoverAllAgents:
     def test_discover_all_agents_uses_cache(self, registry_discovery):
         """Test that discover_all_agents uses cache."""
         # First call
-        with patch.object(registry_discovery, 'list_repositories', return_value=["agents/plan"]) as mock_list:
-            with patch.object(registry_discovery, 'get_agent_card', return_value=PLAN_AGENT_CARD):
+        with patch.object(
+            registry_discovery, "list_repositories", return_value=["agents/plan"]
+        ) as mock_list:
+            with patch.object(
+                registry_discovery, "get_agent_card", return_value=PLAN_AGENT_CARD
+            ):
                 agents1 = registry_discovery.discover_all_agents()
 
                 # Second call should use cache
@@ -210,9 +228,15 @@ class TestDiscoverAllAgents:
 
     def test_discover_all_agents_skips_non_agent_repos(self, registry_discovery):
         """Test that non-agent repositories are skipped."""
-        with patch.object(registry_discovery, 'list_repositories', return_value=["other/repo", "agents/plan"]):
-            with patch.object(registry_discovery, 'list_tags', return_value=["v1"]):
-                with patch.object(registry_discovery, 'get_agent_card', return_value=PLAN_AGENT_CARD):
+        with patch.object(
+            registry_discovery,
+            "list_repositories",
+            return_value=["other/repo", "agents/plan"],
+        ):
+            with patch.object(registry_discovery, "list_tags", return_value=["v1"]):
+                with patch.object(
+                    registry_discovery, "get_agent_card", return_value=PLAN_AGENT_CARD
+                ):
                     agents = registry_discovery.discover_all_agents()
 
                     # Should only have plan agent, not "other/repo"
@@ -230,11 +254,13 @@ class TestFindAgentBySkill:
                 name="plan-agent",
                 url="http://localhost:8001",
                 skills=[{"id": "create_plan", "description": "Creates plans"}],
-                tag="v1"
+                tag="v1",
             )
         }
 
-        with patch.object(registry_discovery, 'discover_all_agents', return_value=mock_agents):
+        with patch.object(
+            registry_discovery, "discover_all_agents", return_value=mock_agents
+        ):
             agent = registry_discovery.find_agent_by_skill("create_plan")
 
             assert agent is not None
@@ -248,11 +274,13 @@ class TestFindAgentBySkill:
                 name="plan-agent",
                 url="http://localhost:8001",
                 skills=[{"id": "create_plan"}],
-                tag="v1"
+                tag="v1",
             )
         }
 
-        with patch.object(registry_discovery, 'discover_all_agents', return_value=mock_agents):
+        with patch.object(
+            registry_discovery, "discover_all_agents", return_value=mock_agents
+        ):
             agent = registry_discovery.find_agent_by_skill("nonexistent_skill")
 
             assert agent is None
@@ -267,22 +295,20 @@ class TestListAllSkills:
             "plan": AgentInfo(
                 name="plan-agent",
                 url="http://localhost:8001",
-                skills=[
-                    {"id": "create_plan", "description": "Creates plans"}
-                ],
-                tag="v1"
+                skills=[{"id": "create_plan", "description": "Creates plans"}],
+                tag="v1",
             ),
             "build": AgentInfo(
                 name="build-agent",
                 url="http://localhost:8002",
-                skills=[
-                    {"id": "generate_code", "description": "Generates code"}
-                ],
-                tag="v1"
-            )
+                skills=[{"id": "generate_code", "description": "Generates code"}],
+                tag="v1",
+            ),
         }
 
-        with patch.object(registry_discovery, 'discover_all_agents', return_value=mock_agents):
+        with patch.object(
+            registry_discovery, "discover_all_agents", return_value=mock_agents
+        ):
             skills = registry_discovery.list_all_skills()
 
             assert len(skills) == 2
@@ -300,19 +326,21 @@ class TestConvenienceFunctions:
             name="plan-agent",
             url="http://localhost:8001",
             skills=[{"id": "create_plan"}],
-            tag="v1"
+            tag="v1",
         )
 
-        with patch.object(RegistryDiscovery, 'find_agent_by_skill', return_value=mock_agent):
-            with patch.object(RegistryDiscovery, 'close'):
+        with patch.object(
+            RegistryDiscovery, "find_agent_by_skill", return_value=mock_agent
+        ):
+            with patch.object(RegistryDiscovery, "close"):
                 url = discover_agent("create_plan", "http://localhost:5000")
 
                 assert url == "http://localhost:8001"
 
     def test_discover_agent_not_found(self):
         """Test discover_agent when skill not found."""
-        with patch.object(RegistryDiscovery, 'find_agent_by_skill', return_value=None):
-            with patch.object(RegistryDiscovery, 'close'):
+        with patch.object(RegistryDiscovery, "find_agent_by_skill", return_value=None):
+            with patch.object(RegistryDiscovery, "close"):
                 url = discover_agent("nonexistent", "http://localhost:5000")
 
                 assert url is None
@@ -320,11 +348,15 @@ class TestConvenienceFunctions:
     def test_discover_agents_function(self):
         """Test discover_agents convenience function."""
         mock_agents = {
-            "plan": AgentInfo(name="plan-agent", url="http://localhost:8001", skills=[], tag="v1")
+            "plan": AgentInfo(
+                name="plan-agent", url="http://localhost:8001", skills=[], tag="v1"
+            )
         }
 
-        with patch.object(RegistryDiscovery, 'discover_all_agents', return_value=mock_agents):
-            with patch.object(RegistryDiscovery, 'close'):
+        with patch.object(
+            RegistryDiscovery, "discover_all_agents", return_value=mock_agents
+        ):
+            with patch.object(RegistryDiscovery, "close"):
                 agents = discover_agents("http://localhost:5000")
 
                 assert len(agents) == 1
@@ -333,11 +365,18 @@ class TestConvenienceFunctions:
     def test_list_skills_function(self):
         """Test list_skills convenience function."""
         mock_skills = [
-            SkillInfo(id="skill1", description="Skill 1", agent_name="agent1", agent_url="url1")
+            SkillInfo(
+                id="skill1",
+                description="Skill 1",
+                agent_name="agent1",
+                agent_url="url1",
+            )
         ]
 
-        with patch.object(RegistryDiscovery, 'list_all_skills', return_value=mock_skills):
-            with patch.object(RegistryDiscovery, 'close'):
+        with patch.object(
+            RegistryDiscovery, "list_all_skills", return_value=mock_skills
+        ):
+            with patch.object(RegistryDiscovery, "close"):
                 skills = list_skills("http://localhost:5000")
 
                 assert len(skills) == 1

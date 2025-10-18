@@ -49,12 +49,7 @@ class TestCommonEndpoints:
     def test_execute_endpoint_exists(self, agent_client):
         """Test that /execute endpoint exists for all agents."""
         client, _ = agent_client
-        message = {
-            "jsonrpc": "2.0",
-            "method": "test",
-            "params": {},
-            "id": "1"
-        }
+        message = {"jsonrpc": "2.0", "method": "test", "params": {}, "id": "1"}
         # Should return 404 for unknown skill, not 405 for missing endpoint
         response = client.post("/execute", json=message)
         assert response.status_code in [200, 404]  # 200 with error or 404
@@ -80,7 +75,7 @@ class TestJSONRPCCompliance:
             "jsonrpc": "2.0",
             "method": "create_plan",
             "params": {"requirements": "test"},
-            "id": "123"
+            "id": "123",
         }
 
         response = plan_client.post("/execute", json=message)
@@ -95,7 +90,7 @@ class TestJSONRPCCompliance:
             "jsonrpc": "2.0",
             "method": "create_plan",
             "params": {"requirements": "test"},
-            "id": "custom-id"
+            "id": "custom-id",
         }
 
         response = plan_client.post("/execute", json=message)
@@ -109,7 +104,7 @@ class TestJSONRPCCompliance:
             "jsonrpc": "2.0",
             "method": "create_plan",
             "params": {"requirements": "test"},
-            "id": "1"
+            "id": "1",
         }
 
         response = plan_client.post("/execute", json=message)
@@ -127,7 +122,7 @@ class TestJSONRPCCompliance:
             "jsonrpc": "2.0",
             "method": "unknown_method",
             "params": {},
-            "id": "1"
+            "id": "1",
         }
 
         response = plan_client.post("/execute", json=message)

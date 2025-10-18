@@ -11,6 +11,7 @@ from dataclasses import dataclass
 @dataclass
 class AgentInfo:
     """Information about a discovered agent."""
+
     name: str
     url: str
     skills: List[Dict]
@@ -20,6 +21,7 @@ class AgentInfo:
 @dataclass
 class SkillInfo:
     """Information about a skill."""
+
     id: str
     description: str
     agent_name: str
@@ -86,14 +88,23 @@ class RegistryDiscovery:
         """
         try:
             # Extract host:port from registry URL (remove http:// or https://)
-            registry_ref = self.registry_url.replace("http://", "").replace("https://", "")
+            registry_ref = self.registry_url.replace("http://", "").replace(
+                "https://", ""
+            )
 
             # Use ORAS to pull the agent card
             result = subprocess.run(
-                ["oras", "pull", f"{registry_ref}/agents/{agent_name}:{tag}", "-o", "/tmp", "--allow-path-traversal"],
+                [
+                    "oras",
+                    "pull",
+                    f"{registry_ref}/agents/{agent_name}:{tag}",
+                    "-o",
+                    "/tmp",
+                    "--allow-path-traversal",
+                ],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
             )
 
             if result.returncode != 0:
@@ -107,7 +118,7 @@ class RegistryDiscovery:
                 print(f"Agent card file not found: {card_file}")
                 return None
 
-            with open(card_file, 'r') as f:
+            with open(card_file, "r") as f:
                 return json.load(f)
 
         except Exception as e:
@@ -146,7 +157,7 @@ class RegistryDiscovery:
                     name=card.get("name", agent_name),
                     url=card.get("url", "http://localhost:800x"),
                     skills=card.get("skills", []),
-                    tag=tag
+                    tag=tag,
                 )
                 agents[agent_name] = agent
 
@@ -182,12 +193,14 @@ class RegistryDiscovery:
 
         for agent in agents.values():
             for skill in agent.skills:
-                skills.append(SkillInfo(
-                    id=skill.get("id", "unknown"),
-                    description=skill.get("description", ""),
-                    agent_name=agent.name,
-                    agent_url=agent.url
-                ))
+                skills.append(
+                    SkillInfo(
+                        id=skill.get("id", "unknown"),
+                        description=skill.get("description", ""),
+                        agent_name=agent.name,
+                        agent_url=agent.url,
+                    )
+                )
 
         return skills
 
@@ -195,9 +208,9 @@ class RegistryDiscovery:
         """Print all discovered agents and their skills."""
         agents = self.discover_all_agents()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("DISCOVERED AGENTS & SKILLS")
-        print("="*60)
+        print("=" * 60)
 
         if not agents:
             print("No agents found in registry")
@@ -211,10 +224,10 @@ class RegistryDiscovery:
 
             for skill in agent.skills:
                 print(f"     • {skill.get('id', 'unknown')}")
-                if skill.get('description'):
+                if skill.get("description"):
                     print(f"       {skill['description']}")
 
-        print("\n" + "="*60 + "\n")
+        print("\n" + "=" * 60 + "\n")
 
     def close(self):
         """Close the HTTP client."""
@@ -223,7 +236,10 @@ class RegistryDiscovery:
 
 # Convenience functions for direct usage
 
-def discover_agent(skill_id: str, registry_url: str = "http://localhost:5000") -> Optional[str]:
+
+def discover_agent(
+    skill_id: str, registry_url: str = "http://localhost:5000"
+) -> Optional[str]:
     """Convenience function: Find agent URL by skill ID.
 
     Args:
@@ -239,7 +255,9 @@ def discover_agent(skill_id: str, registry_url: str = "http://localhost:5000") -
     return agent.url if agent else None
 
 
-def discover_agents(registry_url: str = "http://localhost:5000") -> Dict[str, AgentInfo]:
+def discover_agents(
+    registry_url: str = "http://localhost:5000",
+) -> Dict[str, AgentInfo]:
     """Convenience function: Get all discovered agents.
 
     Args:

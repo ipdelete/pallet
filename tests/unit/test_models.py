@@ -12,10 +12,7 @@ class TestMessage:
     def test_message_creation(self):
         """Test creating a valid Message."""
         msg = Message(
-            jsonrpc="2.0",
-            method="test_method",
-            params={"key": "value"},
-            id="123"
+            jsonrpc="2.0", method="test_method", params={"key": "value"}, id="123"
         )
         assert msg.jsonrpc == "2.0"
         assert msg.method == "test_method"
@@ -52,7 +49,7 @@ class TestSkillDefinition:
             id="test_skill",
             description="A test skill",
             input_schema={"type": "object"},
-            output_schema={"type": "object"}
+            output_schema={"type": "object"},
         )
         assert skill.id == "test_skill"
         assert skill.description == "A test skill"
@@ -84,11 +81,7 @@ class TestAgentCard:
     def test_agent_card_creation(self):
         """Test creating a valid AgentCard."""
         skill = SkillDefinition(id="skill1", description="Test skill")
-        card = AgentCard(
-            name="test-agent",
-            url="http://localhost:8001",
-            skills=[skill]
-        )
+        card = AgentCard(name="test-agent", url="http://localhost:8001", skills=[skill])
         assert card.name == "test-agent"
         assert card.url == "http://localhost:8001"
         assert len(card.skills) == 1
@@ -96,11 +89,7 @@ class TestAgentCard:
 
     def test_agent_card_empty_skills(self):
         """Test creating an AgentCard with empty skills."""
-        card = AgentCard(
-            name="test-agent",
-            url="http://localhost:8001",
-            skills=[]
-        )
+        card = AgentCard(name="test-agent", url="http://localhost:8001", skills=[])
         assert len(card.skills) == 0
 
     def test_agent_card_multiple_skills(self):
@@ -108,12 +97,10 @@ class TestAgentCard:
         skills = [
             SkillDefinition(id="skill1", description="Skill 1"),
             SkillDefinition(id="skill2", description="Skill 2"),
-            SkillDefinition(id="skill3", description="Skill 3")
+            SkillDefinition(id="skill3", description="Skill 3"),
         ]
         card = AgentCard(
-            name="multi-skill-agent",
-            url="http://localhost:9000",
-            skills=skills
+            name="multi-skill-agent", url="http://localhost:9000", skills=skills
         )
         assert len(card.skills) == 3
         assert card.skills[0].id == "skill1"

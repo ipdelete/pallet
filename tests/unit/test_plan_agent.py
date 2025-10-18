@@ -10,7 +10,7 @@ from tests.fixtures.sample_data import (
     REQUIREMENTS_EMAIL_VALIDATOR,
     PLAN_EMAIL_VALIDATOR,
     CLAUDE_JSON_WRAPPED,
-    CLAUDE_INVALID_JSON
+    CLAUDE_INVALID_JSON,
 )
 
 
@@ -81,10 +81,11 @@ class TestExecuteSkill:
         """Test successful plan creation."""
         # Mock the call_claude method
         plan_json = json.dumps(PLAN_EMAIL_VALIDATOR)
-        with patch.object(plan_agent, 'call_claude', new=AsyncMock(return_value=plan_json)):
+        with patch.object(
+            plan_agent, "call_claude", new=AsyncMock(return_value=plan_json)
+        ):
             result = await plan_agent.execute_skill(
-                "create_plan",
-                {"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
+                "create_plan", {"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
             )
 
             assert "title" in result
@@ -95,10 +96,11 @@ class TestExecuteSkill:
     @pytest.mark.asyncio
     async def test_execute_create_plan_with_wrapped_json(self, plan_agent):
         """Test plan creation with JSON wrapped in markdown."""
-        with patch.object(plan_agent, 'call_claude', new=AsyncMock(return_value=CLAUDE_JSON_WRAPPED)):
+        with patch.object(
+            plan_agent, "call_claude", new=AsyncMock(return_value=CLAUDE_JSON_WRAPPED)
+        ):
             result = await plan_agent.execute_skill(
-                "create_plan",
-                {"requirements": "test requirement"}
+                "create_plan", {"requirements": "test requirement"}
             )
 
             # Should successfully parse the wrapped JSON
@@ -108,10 +110,11 @@ class TestExecuteSkill:
     @pytest.mark.asyncio
     async def test_execute_create_plan_invalid_json(self, plan_agent):
         """Test plan creation with invalid JSON response."""
-        with patch.object(plan_agent, 'call_claude', new=AsyncMock(return_value=CLAUDE_INVALID_JSON)):
+        with patch.object(
+            plan_agent, "call_claude", new=AsyncMock(return_value=CLAUDE_INVALID_JSON)
+        ):
             result = await plan_agent.execute_skill(
-                "create_plan",
-                {"requirements": "test"}
+                "create_plan", {"requirements": "test"}
             )
 
             # Should return error structure
@@ -143,12 +146,13 @@ class TestCLaudeIntegration:
     @pytest.mark.asyncio
     async def test_calls_claude_with_correct_prompts(self, plan_agent):
         """Test that execute_skill calls Claude with proper prompts."""
-        mock_claude = AsyncMock(return_value='{"title": "test", "steps": [], "dependencies": [], "estimated_total_time": "1 min"}')
+        mock_claude = AsyncMock(
+            return_value='{"title": "test", "steps": [], "dependencies": [], "estimated_total_time": "1 min"}'
+        )
 
-        with patch.object(plan_agent, 'call_claude', mock_claude):
+        with patch.object(plan_agent, "call_claude", mock_claude):
             await plan_agent.execute_skill(
-                "create_plan",
-                {"requirements": "Test requirement"}
+                "create_plan", {"requirements": "Test requirement"}
             )
 
             # Verify Claude was called
@@ -172,19 +176,25 @@ class TestEndToEndExecution:
 
     def test_execute_create_plan_via_http(self, test_client, plan_agent):
         """Test creating a plan via HTTP POST."""
-        mock_response = json.dumps({
-            "title": "Test Implementation",
-            "steps": [{"name": "Step 1", "description": "Do something", "time": "5 min"}],
-            "dependencies": [],
-            "estimated_total_time": "5 minutes"
-        })
+        mock_response = json.dumps(
+            {
+                "title": "Test Implementation",
+                "steps": [
+                    {"name": "Step 1", "description": "Do something", "time": "5 min"}
+                ],
+                "dependencies": [],
+                "estimated_total_time": "5 minutes",
+            }
+        )
 
-        with patch.object(plan_agent, 'call_claude', new=AsyncMock(return_value=mock_response)):
+        with patch.object(
+            plan_agent, "call_claude", new=AsyncMock(return_value=mock_response)
+        ):
             message = {
                 "jsonrpc": "2.0",
                 "method": "create_plan",
                 "params": {"requirements": "Create a test function"},
-                "id": "test-123"
+                "id": "test-123",
             }
 
             response = test_client.post("/execute", json=message)
@@ -202,7 +212,7 @@ class TestEndToEndExecution:
             "jsonrpc": "2.0",
             "method": "create_plan",
             "params": {},
-            "id": "test-456"
+            "id": "test-456",
         }
 
         response = test_client.post("/execute", json=message)

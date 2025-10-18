@@ -24,17 +24,10 @@ def sample_skill() -> SkillDefinition:
         description="A test skill",
         input_schema={
             "type": "object",
-            "properties": {
-                "param": {"type": "string"}
-            },
-            "required": ["param"]
+            "properties": {"param": {"type": "string"}},
+            "required": ["param"],
         },
-        output_schema={
-            "type": "object",
-            "properties": {
-                "result": {"type": "string"}
-            }
-        }
+        output_schema={"type": "object", "properties": {"result": {"type": "string"}}},
     )
 
 
@@ -53,16 +46,16 @@ def sample_plan() -> Dict[str, Any]:
             {
                 "name": "Create regex pattern",
                 "description": "Define regex for email validation",
-                "time": "10 minutes"
+                "time": "10 minutes",
             },
             {
                 "name": "Implement validation function",
                 "description": "Write the validation logic",
-                "time": "15 minutes"
-            }
+                "time": "15 minutes",
+            },
         ],
         "dependencies": ["re"],
-        "estimated_total_time": "25 minutes"
+        "estimated_total_time": "25 minutes",
     }
 
 
@@ -92,7 +85,7 @@ def sample_code_result() -> Dict[str, Any]:
         "code": "import re\n\ndef validate_email(email: str) -> bool:\n    return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', email))",
         "explanation": "Email validation function using regex",
         "language": "python",
-        "functions": ["validate_email"]
+        "functions": ["validate_email"],
     }
 
 
@@ -104,15 +97,15 @@ def sample_review() -> Dict[str, Any]:
         "issues": [
             {
                 "type": "style",
-                "comment": "Consider adding more comprehensive regex pattern"
+                "comment": "Consider adding more comprehensive regex pattern",
             }
         ],
         "suggestions": [
             "Add unit tests for edge cases",
-            "Consider handling internationalized domain names"
+            "Consider handling internationalized domain names",
         ],
         "approved": True,
-        "summary": "Good implementation with room for improvement"
+        "summary": "Good implementation with room for improvement",
     }
 
 
@@ -129,28 +122,28 @@ def sample_agent_card() -> Dict[str, Any]:
                 "input_schema": {
                     "type": "object",
                     "properties": {"param": {"type": "string"}},
-                    "required": ["param"]
+                    "required": ["param"],
                 },
                 "output_schema": {
                     "type": "object",
-                    "properties": {"result": {"type": "string"}}
-                }
+                    "properties": {"result": {"type": "string"}},
+                },
             }
-        ]
+        ],
     }
 
 
 @pytest.fixture
 def mock_claude_response() -> str:
     """Mock response from Claude CLI."""
-    return '''```json
+    return """```json
 {
     "title": "Test Plan",
     "steps": [],
     "dependencies": [],
     "estimated_total_time": "10 minutes"
 }
-```'''
+```"""
 
 
 @pytest.fixture
@@ -158,7 +151,7 @@ def mock_subprocess():
     """Mock subprocess for Claude CLI calls."""
     mock = AsyncMock()
     mock.returncode = 0
-    mock.communicate = AsyncMock(return_value=(b'{"result": "test"}', b''))
+    mock.communicate = AsyncMock(return_value=(b'{"result": "test"}', b""))
     return mock
 
 
@@ -168,11 +161,9 @@ def mock_httpx_client():
     mock_client = AsyncMock()
     mock_response = AsyncMock()
     mock_response.status_code = 200
-    mock_response.json = AsyncMock(return_value={
-        "jsonrpc": "2.0",
-        "result": {"test": "data"},
-        "id": "1"
-    })
+    mock_response.json = AsyncMock(
+        return_value={"jsonrpc": "2.0", "result": {"test": "data"}, "id": "1"}
+    )
     mock_response.raise_for_status = Mock()
     mock_client.post = AsyncMock(return_value=mock_response)
     mock_client.get = AsyncMock(return_value=mock_response)
@@ -182,9 +173,7 @@ def mock_httpx_client():
 @pytest.fixture
 def mock_registry_response():
     """Mock response from OCI registry."""
-    return {
-        "repositories": ["agents/plan", "agents/build", "agents/test"]
-    }
+    return {"repositories": ["agents/plan", "agents/build", "agents/test"]}
 
 
 @pytest.fixture

@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, Mock, patch
 from fastapi.testclient import TestClient
 
 from src.agents.base import BaseAgent, SkillDefinition, Message
-from tests.fixtures.sample_data import CLAUDE_JSON_WRAPPED, CLAUDE_JSON_PLAIN, CLAUDE_INVALID_JSON
+from tests.fixtures.sample_data import (
+    CLAUDE_JSON_WRAPPED,
+    CLAUDE_JSON_PLAIN,
+    CLAUDE_INVALID_JSON,
+)
 
 
 class ConcreteAgent(BaseAgent):
@@ -22,11 +26,7 @@ class ConcreteAgent(BaseAgent):
 @pytest.fixture
 def test_agent(sample_skill):
     """Create a test agent instance."""
-    return ConcreteAgent(
-        name="test-agent",
-        port=9999,
-        skills=[sample_skill]
-    )
+    return ConcreteAgent(name="test-agent", port=9999, skills=[sample_skill])
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ class TestBaseAgentInitialization:
         """Test agent with multiple skills."""
         skills = [
             SkillDefinition(id="skill1", description="Skill 1"),
-            SkillDefinition(id="skill2", description="Skill 2")
+            SkillDefinition(id="skill2", description="Skill 2"),
         ]
         agent = ConcreteAgent(name="multi", port=8888, skills=skills)
         assert len(agent.skills) == 2
@@ -92,7 +92,7 @@ class TestExecuteEndpoint:
             "jsonrpc": "2.0",
             "method": "test_skill",
             "params": {"param": "test_value"},
-            "id": "123"
+            "id": "123",
         }
         response = test_client.post("/execute", json=message)
         assert response.status_code == 200
@@ -109,7 +109,7 @@ class TestExecuteEndpoint:
             "jsonrpc": "2.0",
             "method": "unknown_skill",
             "params": {},
-            "id": "456"
+            "id": "456",
         }
         response = test_client.post("/execute", json=message)
         # Returns 200 with error in JSON body (caught by general exception handler)
@@ -121,12 +121,7 @@ class TestExecuteEndpoint:
     def test_execute_returns_error_on_exception(self, test_client):
         """Test that exceptions in execute_skill are handled."""
         # This will trigger the ValueError in execute_skill
-        message = {
-            "jsonrpc": "2.0",
-            "method": "invalid",
-            "params": {},
-            "id": "789"
-        }
+        message = {"jsonrpc": "2.0", "method": "invalid", "params": {}, "id": "789"}
         response = test_client.post("/execute", json=message)
 
         # Returns 200 with error in JSON body
@@ -141,7 +136,7 @@ class TestExecuteEndpoint:
             "jsonrpc": "2.0",
             "method": "test_skill",
             "params": {"param": "value"},
-            "id": "abc"
+            "id": "abc",
         }
         response = test_client.post("/execute", json=message)
         data = response.json()
@@ -160,15 +155,10 @@ class TestCallClaude:
         """Test successful Claude CLI call."""
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(
-            return_value=(b'{"result": "test"}', b'')
-        )
+        mock_process.communicate = AsyncMock(return_value=(b'{"result": "test"}', b""))
 
-        with patch('asyncio.create_subprocess_exec', return_value=mock_process):
-            result = await test_agent.call_claude(
-                "system prompt",
-                "user message"
-            )
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            result = await test_agent.call_claude("system prompt", "user message")
             assert result == '{"result": "test"}'
 
     @pytest.mark.asyncio
@@ -176,9 +166,11 @@ class TestCallClaude:
         """Test that call_claude combines system and user prompts."""
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(b'test', b''))
+        mock_process.communicate = AsyncMock(return_value=(b"test", b""))
 
-        with patch('asyncio.create_subprocess_exec', return_value=mock_process) as mock_exec:
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=mock_process
+        ) as mock_exec:
             await test_agent.call_claude("system", "user")
 
             # Verify the command includes the combined prompt
@@ -194,18 +186,16 @@ class TestCallClaude:
         """Test Claude CLI call failure."""
         mock_process = AsyncMock()
         mock_process.returncode = 1
-        mock_process.communicate = AsyncMock(
-            return_value=(b'', b'Error message')
-        )
+        mock_process.communicate = AsyncMock(return_value=(b"", b"Error message"))
 
-        with patch('asyncio.create_subprocess_exec', return_value=mock_process):
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with pytest.raises(RuntimeError, match="Claude code CLI failed"):
                 await test_agent.call_claude("system", "user")
 
     @pytest.mark.asyncio
     async def test_call_claude_not_found(self, test_agent):
         """Test Claude CLI not found."""
-        with patch('asyncio.create_subprocess_exec', side_effect=FileNotFoundError()):
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError()):
             with pytest.raises(RuntimeError, match="Claude code CLI not found"):
                 await test_agent.call_claude("system", "user")
 
@@ -217,11 +207,9 @@ class TestCallAgentSkill:
     async def test_call_agent_skill_success(self, test_agent):
         """Test successful agent-to-agent skill call."""
         mock_response = Mock()
-        mock_response.json = Mock(return_value={
-            "jsonrpc": "2.0",
-            "result": {"data": "test"},
-            "id": "1"
-        })
+        mock_response.json = Mock(
+            return_value={"jsonrpc": "2.0", "result": {"data": "test"}, "id": "1"}
+        )
         mock_response.raise_for_status = Mock()
 
         mock_client = Mock()
@@ -229,11 +217,11 @@ class TestCallAgentSkill:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             result = await test_agent.call_agent_skill(
                 agent_url="http://localhost:8001",
                 skill_id="test_skill",
-                params={"key": "value"}
+                params={"key": "value"},
             )
 
             assert result["jsonrpc"] == "2.0"
@@ -243,11 +231,9 @@ class TestCallAgentSkill:
     async def test_call_agent_skill_constructs_message(self, test_agent):
         """Test that call_agent_skill constructs proper JSON-RPC message."""
         mock_response = Mock()
-        mock_response.json = Mock(return_value={
-            "jsonrpc": "2.0",
-            "result": {},
-            "id": "1"
-        })
+        mock_response.json = Mock(
+            return_value={"jsonrpc": "2.0", "result": {}, "id": "1"}
+        )
         mock_response.raise_for_status = Mock()
 
         mock_client = Mock()
@@ -255,11 +241,11 @@ class TestCallAgentSkill:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch('httpx.AsyncClient', return_value=mock_client) as mock:
+        with patch("httpx.AsyncClient", return_value=mock_client) as mock:
             await test_agent.call_agent_skill(
                 agent_url="http://test:8000",
                 skill_id="my_skill",
-                params={"param1": "value1"}
+                params={"param1": "value1"},
             )
 
             # Verify the POST was called with correct structure

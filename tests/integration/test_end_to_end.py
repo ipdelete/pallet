@@ -17,7 +17,7 @@ from tests.fixtures.sample_data import (
     REQUIREMENTS_EMAIL_VALIDATOR,
     PLAN_EMAIL_VALIDATOR,
     CODE_RESULT_EMAIL,
-    REVIEW_GOOD
+    REVIEW_GOOD,
 )
 
 
@@ -33,23 +33,25 @@ class TestFullOrchestration:
     async def test_full_orchestration_workflow(self, tmp_path):
         """Test complete orchestration from requirements to review."""
         # Mock discovery to return agent URLs
-        with patch('src.orchestrator.discover_agent') as mock_discover:
+        with patch("src.orchestrator.discover_agent") as mock_discover:
             mock_discover.side_effect = [
                 "http://localhost:8001",  # Plan agent
                 "http://localhost:8002",  # Build agent
-                "http://localhost:8003"   # Test agent
+                "http://localhost:8003",  # Test agent
             ]
 
             # Mock agent skill calls
-            with patch('src.orchestrator.call_agent_skill') as mock_call:
+            with patch("src.orchestrator.call_agent_skill") as mock_call:
                 mock_call.side_effect = [
                     {"result": PLAN_EMAIL_VALIDATOR},
                     {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD}
+                    {"result": REVIEW_GOOD},
                 ]
 
                 # Mock file operations to use tmp_path
-                with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+                with patch(
+                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                ):
                     await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
                     # Verify all steps were executed
@@ -65,8 +67,10 @@ class TestFullOrchestration:
     @pytest.mark.asyncio
     async def test_orchestration_data_flow(self, tmp_path):
         """Test that data flows correctly through the pipeline."""
-        with patch('src.orchestrator.discover_agent', return_value="http://localhost:8000"):
-            with patch('src.orchestrator.call_agent_skill') as mock_call:
+        with patch(
+            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
+        ):
+            with patch("src.orchestrator.call_agent_skill") as mock_call:
                 # Capture calls to verify data flow
                 calls = []
 
@@ -84,12 +88,16 @@ class TestFullOrchestration:
 
                 mock_call.side_effect = track_call
 
-                with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+                with patch(
+                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                ):
                     await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
                     # Verify data flow
                     # Call 1: requirements → plan
-                    assert calls[0][0][2]["requirements"] == REQUIREMENTS_EMAIL_VALIDATOR
+                    assert (
+                        calls[0][0][2]["requirements"] == REQUIREMENTS_EMAIL_VALIDATOR
+                    )
 
                     # Call 2: plan → code
                     assert calls[1][0][2]["plan"] == PLAN_EMAIL_VALIDATOR
@@ -101,15 +109,19 @@ class TestFullOrchestration:
     @pytest.mark.asyncio
     async def test_output_files_content(self, tmp_path):
         """Test that output files contain correct data."""
-        with patch('src.orchestrator.discover_agent', return_value="http://localhost:8000"):
-            with patch('src.orchestrator.call_agent_skill') as mock_call:
+        with patch(
+            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
+        ):
+            with patch("src.orchestrator.call_agent_skill") as mock_call:
                 mock_call.side_effect = [
                     {"result": PLAN_EMAIL_VALIDATOR},
                     {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD}
+                    {"result": REVIEW_GOOD},
                 ]
 
-                with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+                with patch(
+                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                ):
                     await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
                     # Verify main.py contains the code
@@ -142,21 +154,23 @@ class TestDiscoveryIntegration:
     @pytest.mark.asyncio
     async def test_orchestration_uses_discovery(self, tmp_path):
         """Test that orchestration uses discovery to find agents."""
-        with patch('src.orchestrator.discover_agent') as mock_discover:
+        with patch("src.orchestrator.discover_agent") as mock_discover:
             mock_discover.side_effect = [
                 "http://localhost:8001",
                 "http://localhost:8002",
-                "http://localhost:8003"
+                "http://localhost:8003",
             ]
 
-            with patch('src.orchestrator.call_agent_skill') as mock_call:
+            with patch("src.orchestrator.call_agent_skill") as mock_call:
                 mock_call.side_effect = [
                     {"result": PLAN_EMAIL_VALIDATOR},
                     {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD}
+                    {"result": REVIEW_GOOD},
                 ]
 
-                with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+                with patch(
+                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                ):
                     await orchestrate("test requirements")
 
                     # Verify discovery was called for each skill
@@ -177,15 +191,19 @@ class TestErrorScenarios:
     @pytest.mark.asyncio
     async def test_orchestration_with_agent_failure(self, tmp_path):
         """Test orchestration behavior when an agent fails."""
-        with patch('src.orchestrator.discover_agent', return_value="http://localhost:8000"):
-            with patch('src.orchestrator.call_agent_skill') as mock_call:
+        with patch(
+            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
+        ):
+            with patch("src.orchestrator.call_agent_skill") as mock_call:
                 # First call succeeds, second fails
                 mock_call.side_effect = [
                     {"result": PLAN_EMAIL_VALIDATOR},
-                    Exception("Agent connection failed")
+                    Exception("Agent connection failed"),
                 ]
 
-                with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+                with patch(
+                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                ):
                     # Should raise exception
                     with pytest.raises(Exception, match="Agent connection failed"):
                         await orchestrate("test requirements")
@@ -194,10 +212,15 @@ class TestErrorScenarios:
     async def test_orchestration_with_discovery_failure(self, tmp_path):
         """Test orchestration behavior when discovery fails."""
         import httpx
-        with patch('src.orchestrator.discover_agent', return_value=None):
-            with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+
+        with patch("src.orchestrator.discover_agent", return_value=None):
+            with patch(
+                "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+            ):
                 # Should raise error when trying to use None URL
-                with pytest.raises((AttributeError, TypeError, httpx.UnsupportedProtocol)):
+                with pytest.raises(
+                    (AttributeError, TypeError, httpx.UnsupportedProtocol)
+                ):
                     await orchestrate("test requirements")
 
 
@@ -217,7 +240,7 @@ class TestRealAgentsCommunication:
         result = await call_agent_skill(
             agent_url="http://localhost:8001",
             skill_id="create_plan",
-            params={"requirements": "Create a simple hello world function"}
+            params={"requirements": "Create a simple hello world function"},
         )
 
         assert "result" in result
@@ -227,7 +250,7 @@ class TestRealAgentsCommunication:
     @pytest.mark.asyncio
     async def test_real_end_to_end(self, tmp_path):
         """Test real end-to-end orchestration (requires all services)."""
-        with patch('src.orchestrator.ensure_app_folder', return_value=str(tmp_path)):
+        with patch("src.orchestrator.ensure_app_folder", return_value=str(tmp_path)):
             await orchestrate("Create a function that adds two numbers")
 
             # Verify output files exist
@@ -244,9 +267,9 @@ class TestAppFolderManagement:
         """Test that ensure_app_folder creates directory if missing."""
         app_path = os.path.join(str(tmp_path), "app")
 
-        with patch('src.orchestrator.ensure_app_folder', wraps=ensure_app_folder):
-            with patch('os.path.exists', return_value=False):
-                with patch('os.makedirs') as mock_makedirs:
+        with patch("src.orchestrator.ensure_app_folder", wraps=ensure_app_folder):
+            with patch("os.path.exists", return_value=False):
+                with patch("os.makedirs") as mock_makedirs:
                     ensure_app_folder()
                     mock_makedirs.assert_called_once()
 

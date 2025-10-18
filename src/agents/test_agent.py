@@ -18,16 +18,13 @@ class TestAgent(BaseAgent):
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "Code to review"
-                        },
+                        "code": {"type": "string", "description": "Code to review"},
                         "language": {
                             "type": "string",
-                            "description": "Programming language (default: python)"
-                        }
+                            "description": "Programming language (default: python)",
+                        },
                     },
-                    "required": ["code"]
+                    "required": ["code"],
                 },
                 output_schema={
                     "type": "object",
@@ -36,9 +33,9 @@ class TestAgent(BaseAgent):
                         "issues": {"type": "array"},
                         "suggestions": {"type": "array"},
                         "approved": {"type": "boolean"},
-                        "summary": {"type": "string"}
-                    }
-                }
+                        "summary": {"type": "string"},
+                    },
+                },
             )
         ]
         super().__init__(name="test-agent", port=8003, skills=skills)
@@ -66,7 +63,9 @@ class TestAgent(BaseAgent):
 
         Return a JSON object with:
         - quality_score: 1-10 score for overall code quality
-        - issues: Array of issues found, each with type (bug/security/style/documentation), line number (if applicable), and comment
+        - issues: Array of issues found, each with type
+                 (bug/security/style/documentation), line number (if applicable),
+                 and comment
         - suggestions: Array of suggestions for improvement
         - approved: Boolean indicating if code is production-ready
         - summary: Brief summary of the review
@@ -98,15 +97,12 @@ Return ONLY the JSON object, no additional text."""
             return {
                 "quality_score": 0,
                 "issues": [
-                    {
-                        "type": "error",
-                        "comment": "Failed to parse review response"
-                    }
+                    {"type": "error", "comment": "Failed to parse review response"}
                 ],
                 "suggestions": [],
                 "approved": False,
                 "summary": response,
-                "error": str(e)
+                "error": str(e),
             }
 
 

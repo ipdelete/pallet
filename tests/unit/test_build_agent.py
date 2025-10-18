@@ -9,7 +9,7 @@ from src.agents.build_agent import BuildAgent
 from tests.fixtures.sample_data import (
     PLAN_EMAIL_VALIDATOR,
     CODE_EMAIL_VALIDATOR,
-    CODE_RESULT_EMAIL
+    CODE_RESULT_EMAIL,
 )
 
 
@@ -79,10 +79,11 @@ class TestExecuteSkill:
     async def test_execute_generate_code_success(self, build_agent):
         """Test successful code generation."""
         code_result_json = json.dumps(CODE_RESULT_EMAIL)
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=code_result_json)):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value=code_result_json)
+        ):
             result = await build_agent.execute_skill(
-                "generate_code",
-                {"plan": PLAN_EMAIL_VALIDATOR}
+                "generate_code", {"plan": PLAN_EMAIL_VALIDATOR}
             )
 
             assert "code" in result
@@ -94,10 +95,11 @@ class TestExecuteSkill:
     async def test_execute_with_dict_plan(self, build_agent):
         """Test code generation with dict plan (converts to JSON string)."""
         code_result_json = json.dumps(CODE_RESULT_EMAIL)
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=code_result_json)):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value=code_result_json)
+        ):
             result = await build_agent.execute_skill(
-                "generate_code",
-                {"plan": PLAN_EMAIL_VALIDATOR}
+                "generate_code", {"plan": PLAN_EMAIL_VALIDATOR}
             )
 
             assert "code" in result
@@ -106,10 +108,11 @@ class TestExecuteSkill:
     async def test_execute_with_string_plan(self, build_agent):
         """Test code generation with string plan."""
         code_result_json = json.dumps(CODE_RESULT_EMAIL)
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=code_result_json)):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value=code_result_json)
+        ):
             result = await build_agent.execute_skill(
-                "generate_code",
-                {"plan": "Simple plan as string"}
+                "generate_code", {"plan": "Simple plan as string"}
             )
 
             assert "code" in result
@@ -129,10 +132,11 @@ class TestExecuteSkill:
     @pytest.mark.asyncio
     async def test_execute_with_invalid_json_response(self, build_agent):
         """Test code generation with invalid JSON response."""
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value="Not valid JSON")):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value="Not valid JSON")
+        ):
             result = await build_agent.execute_skill(
-                "generate_code",
-                {"plan": PLAN_EMAIL_VALIDATOR}
+                "generate_code", {"plan": PLAN_EMAIL_VALIDATOR}
             )
 
             # Should return fallback structure
@@ -148,10 +152,9 @@ class TestClaudeIntegration:
         """Test that execute_skill calls Claude with the plan."""
         mock_claude = AsyncMock(return_value=json.dumps(CODE_RESULT_EMAIL))
 
-        with patch.object(build_agent, 'call_claude', mock_claude):
+        with patch.object(build_agent, "call_claude", mock_claude):
             await build_agent.execute_skill(
-                "generate_code",
-                {"plan": PLAN_EMAIL_VALIDATOR}
+                "generate_code", {"plan": PLAN_EMAIL_VALIDATOR}
             )
 
             # Verify Claude was called
@@ -177,12 +180,14 @@ class TestEndToEndExecution:
         """Test generating code via HTTP POST."""
         mock_response = json.dumps(CODE_RESULT_EMAIL)
 
-        with patch.object(build_agent, 'call_claude', new=AsyncMock(return_value=mock_response)):
+        with patch.object(
+            build_agent, "call_claude", new=AsyncMock(return_value=mock_response)
+        ):
             message = {
                 "jsonrpc": "2.0",
                 "method": "generate_code",
                 "params": {"plan": PLAN_EMAIL_VALIDATOR},
-                "id": "build-123"
+                "id": "build-123",
             }
 
             response = test_client.post("/execute", json=message)
@@ -200,7 +205,7 @@ class TestEndToEndExecution:
             "jsonrpc": "2.0",
             "method": "generate_code",
             "params": {},
-            "id": "build-456"
+            "id": "build-456",
         }
 
         response = test_client.post("/execute", json=message)
