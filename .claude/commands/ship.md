@@ -6,112 +6,78 @@ description: Complete pre-flight checks and ship code changes (lint, test, secre
 
 Run comprehensive pre-flight checks, verify the repository is ready for deployment, and push changes.
 
-### Step 1: Determine Current Branch & Base Branch
+## Workflow Steps
 
-First, show the current branch and what it was branched from:
+### Step 1: Verify Git Status
 
-```bash
-git branch -vv
-git log --oneline --graph --all --decorate -20
-```
+Execute these git commands to understand current state:
+- `git branch -vv` - Show current branch and tracking status
+- `git log --oneline --graph --all --decorate -20` - Show recent commit history
 
 ### Step 2: Run Code Quality Checks
 
-Run linting and tests using invoke:
-
-```bash
-uv run invoke lint.black-check
-uv run invoke lint.flake8
-uv run invoke test
-```
+Execute invoke tasks for code quality:
+- `uv run invoke lint.black-check` - Verify black formatting
+- `uv run invoke lint.flake8` - Run flake8 style checks
+- `uv run invoke test` - Run all tests
 
 ### Step 3: Verify No Secrets
 
-Scan for potential secrets (common patterns):
+Scan for potential secrets in staged changes and working directory:
+- Check for common secret patterns: `ANTHROPIC_API_KEY`, `password`, `secret`, `token`, `key=`
+- Check for untracked secret files: `.env`, `credentials`, `secrets`, `.key`
 
-```bash
-# Check for common secret patterns
-git diff HEAD --cached | grep -E '(ANTHROPIC_API_KEY|password|secret|token|key.*=)' && echo "⚠️  WARNING: Possible secrets detected in staged changes" || echo "✅ No obvious secrets detected"
+### Step 4: Review Changes
 
-# Check for untracked files that might contain secrets
-ls -la | grep -E '(\.env|credentials|secrets|\.key)' && echo "⚠️  WARNING: Potential secret files in working directory" || echo "✅ No obvious secret files detected"
-```
+Show all changes that will be committed:
+- Execute `git diff HEAD` to see all modifications
+- Ensure changes align with intended scope
 
-### Step 4: Verify Git Status & .gitignore
+### Step 5: Stage Changes
 
-Check if .gitignore needs updating and repo is in a good state:
+- Execute `git add .` to stage all changes
 
-```bash
-git status
-git check-ignore -v * 2>/dev/null | head -20 || echo "✅ .gitignore check complete"
-```
+### Step 6: Create Commit
 
-### Step 5: Review Changes to Commit
+Review staged changes and create a descriptive commit message following conventional commits format:
+- `feat:` for new features
+- `fix:` for bug fixes
+- `docs:` for documentation
+- `refactor:` for code refactoring
+- `test:` for test additions/changes
+- `chore:` for maintenance tasks
 
-Show what will be committed:
+### Step 7: Push to Remote
 
-```bash
-git diff HEAD
-```
-
-### Step 6: Stage All Changes
-
-```bash
-git add .
-```
-
-### Step 7: Create & Execute Commit
-
-Review staged changes and create a descriptive commit message based on the changes. The message should follow conventional commits format (feat, fix, docs, refactor, test, chore, etc.).
-
-After reviewing the diffs and understanding what's being committed, create a commit with an appropriate message.
-
-### Step 8: Push to Remote
-
-```bash
-git push
-```
-
-Push the committed changes to the remote repository.
+- Execute `git push` to push committed changes
 
 ---
 
-## Step 9: Generate Deployment Report
+## Deployment Report
 
-After all steps complete successfully, generate a comprehensive report:
+After all steps complete successfully, display a comprehensive report with these sections:
 
-```bash
-echo "=== 📊 SHIP DEPLOYMENT REPORT ==="
-echo ""
-echo "=== Git Statistics ==="
-echo "Current branch:"
-git rev-parse --abbrev-ref HEAD
-echo ""
-echo "Commits since last tag:"
-git rev-list --count $(git describe --tags --abbrev=0)..HEAD 2>/dev/null || git rev-list --count HEAD
-echo ""
-echo "Last 5 commits:"
-git log --oneline -5
-echo ""
-echo "Files changed in this push:"
-git diff $(git merge-base HEAD origin/$(git rev-parse --abbrev-ref HEAD))..HEAD --name-status | head -20
-echo ""
-echo "Lines added/deleted:"
-git diff $(git merge-base HEAD origin/$(git rev-parse --abbrev-ref HEAD))..HEAD --stat | tail -1
-echo ""
-echo "=== Actions Completed ==="
-echo "✅ Code quality checks passed (black, flake8)"
-echo "✅ All tests passed"
-echo "✅ No secrets detected in changes"
-echo "✅ .gitignore verified"
-echo "✅ Repository state verified clean"
-echo "✅ Changes staged and committed"
-echo "✅ Changes pushed to remote"
-echo ""
-echo "=== Deployment Summary ==="
-git log -1 --format="Commit: %H%nAuthor: %an <%ae>%nDate: %ad%nMessage:%n%B" --date=short
-echo "=== 🎉 READY TO SHIP ==="
-```
+### Git Statistics
+- Current branch name
+- Commits since last tag
+- Last 5 commits (oneline format)
+- Files changed in this push
+- Lines added/deleted summary
+
+### Actions Completed
+- ✅ Code quality checks passed (black, flake8)
+- ✅ All tests passed
+- ✅ No secrets detected in changes
+- ✅ .gitignore verified
+- ✅ Repository state verified clean
+- ✅ Changes staged and committed
+- ✅ Changes pushed to remote
+
+### Deployment Summary
+- Full commit hash
+- Author name and email
+- Commit date
+- Full commit message
 
 ---
 
@@ -120,7 +86,7 @@ echo "=== 🎉 READY TO SHIP ==="
 Before shipping, ensure:
 - ✅ Linting passes (black-check, flake8)
 - ✅ All tests pass
-- ✅ No secrets in changes
+- ✅ No secrets detected in changes
 - ✅ .gitignore is properly configured
 - ✅ Repository is in clean state (no merge conflicts, etc.)
 - ✅ Meaningful commit message
