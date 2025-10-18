@@ -9,17 +9,17 @@ Comprehensive test coverage for the Pallet A2A agent orchestration framework.
 uv sync --extra test
 
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src --cov-report=html
 
 # Run specific test categories
-pytest -m unit          # Unit tests only
-pytest -m integration   # Integration tests only
-pytest -m api          # API endpoint tests only
-pytest -m "not e2e"    # Skip end-to-end tests (default)
-pytest -m "not slow"   # Skip slow tests
+uv run pytest -m unit          # Unit tests only
+uv run pytest -m integration   # Integration tests only
+uv run pytest -m api          # API endpoint tests only
+uv run pytest -m "not e2e"    # Skip end-to-end tests (default)
+uv run pytest -m "not slow"   # Skip slow tests
 ```
 
 ## Test Structure
@@ -145,57 +145,57 @@ Tests are marked for selective execution:
 
 ```bash
 # Run all tests (excluding slow and e2e by default)
-pytest
+uv run pytest
 
 # Verbose output
-pytest -v
+uv run pytest -v
 
 # Show print statements
-pytest -s
+uv run pytest -s
 
 # Run specific file
-pytest tests/unit/test_base_agent.py
+uv run pytest tests/unit/test_base_agent.py
 
 # Run specific test class
-pytest tests/unit/test_base_agent.py::TestAgentCardEndpoint
+uv run pytest tests/unit/test_base_agent.py::TestAgentCardEndpoint
 
 # Run specific test function
-pytest tests/unit/test_base_agent.py::TestAgentCardEndpoint::test_get_agent_card
+uv run pytest tests/unit/test_base_agent.py::TestAgentCardEndpoint::test_get_agent_card
 ```
 
 ### Coverage Reports
 
 ```bash
 # Generate HTML coverage report
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src --cov-report=html
 
 # View coverage in terminal
-pytest --cov=src --cov-report=term-missing
+uv run pytest --cov=src --cov-report=term-missing
 
 # Generate XML coverage (for CI)
-pytest --cov=src --cov-report=xml
+uv run pytest --cov=src --cov-report=xml
 ```
 
 ### Filtered Runs
 
 ```bash
 # Only unit tests
-pytest -m unit
+uv run pytest -m unit
 
 # Only integration tests
-pytest -m integration
+uv run pytest -m integration
 
 # Only API tests
-pytest -m api
+uv run pytest -m api
 
 # Skip slow tests
-pytest -m "not slow"
+uv run pytest -m "not slow"
 
 # Skip end-to-end tests
-pytest -m "not e2e"
+uv run pytest -m "not e2e"
 
 # Unit and integration, but not slow
-pytest -m "(unit or integration) and not slow"
+uv run pytest -m "(unit or integration) and not slow"
 ```
 
 ## Test Fixtures
@@ -300,7 +300,7 @@ jobs:
           pip install uv
           uv sync --extra test
       - name: Run tests
-        run: pytest --cov=src --cov-report=xml
+        run: uv run pytest --cov=src --cov-report=xml
       - name: Upload coverage
         uses: codecov/codecov-action@v3
 ```
@@ -311,26 +311,26 @@ jobs:
 
 ```bash
 # Show full traceback
-pytest --tb=long
+uv run pytest --tb=long
 
 # Drop into debugger on failure
-pytest --pdb
+uv run pytest --pdb
 
 # Stop at first failure
-pytest -x
+uv run pytest -x
 
 # Show local variables in traceback
-pytest -l
+uv run pytest -l
 ```
 
 ### Logging
 
 ```bash
 # Show all log output
-pytest --log-cli-level=DEBUG
+uv run pytest --log-cli-level=DEBUG
 
 # Show specific logger
-pytest --log-cli-level=DEBUG -k test_name
+uv run pytest --log-cli-level=DEBUG -k test_name
 ```
 
 ## Best Practices
@@ -365,7 +365,7 @@ pytest --log-cli-level=DEBUG -k test_name
 cd /path/to/pallet
 
 # Run pytest from project root
-pytest
+uv run pytest
 ```
 
 ### Async tests not running
