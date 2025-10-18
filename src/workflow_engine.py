@@ -6,14 +6,18 @@ This module provides the foundation for the workflow engine:
 - WorkflowContext for managing execution state
 - Template expression resolution ({{ variable.path }} syntax)
 - YAML loading and validation
+- WorkflowEngine for executing workflows with various patterns
 """
 
 import re
 import yaml
+import asyncio
+import httpx
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
+from src.discovery import discover_agent
 
 
 class StepType(str, Enum):
@@ -164,3 +168,337 @@ def load_workflow_from_yaml(yaml_content: Union[str, Path]) -> WorkflowDefinitio
         data = yaml.safe_load(yaml_content)
 
     return WorkflowDefinition(**data)
+
+
+class WorkflowEngine:
+    """Executes workflows with support for multiple execution patterns."""
+
+    def __init__(self):
+        """Initialize workflow engine."""
+        self.agent_cache = {}  # {skill_id: agent_url}
+
+    async def discover_agent_for_skill(self, skill_id: str) -> str:
+        """
+        Discover agent URL for a skill (with caching).
+
+        Args:
+            skill_id: Skill identifier
+
+        Returns:
+            Agent URL
+
+        Raises:
+            ValueError: If skill not found
+        """
+        if skill_id in self.agent_cache:
+            return self.agent_cache[skill_id]
+
+        # Use existing discovery module (run in thread pool since it's sync)
+        loop = asyncio.get_event_loop()
+        agent_url = await loop.run_in_executor(None, discover_agent, skill_id)
+        if not agent_url:
+            raise ValueError(f"No agent found for skill: {skill_id}")
+
+        self.agent_cache[skill_id] = agent_url
+        return agent_url
+
+    async def call_agent_skill(
+        self,
+        agent_url: str,
+        skill_id: str,
+        params: Dict[str, Any],
+        timeout: int = 300,
+    ) -> Dict[str, Any]:
+        """
+        Call an agent skill via JSON-RPC.
+
+        Args:
+            agent_url: Agent URL (e.g., http://localhost:8001)
+            skill_id: Skill ID to execute
+            params: Skill parameters
+            timeout: Timeout in seconds
+
+        Returns:
+            Skill result
+
+        Raises:
+            httpx.TimeoutException: If request times out
+            httpx.HTTPError: If request fails
+        """
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{agent_url}/execute",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": skill_id,
+                    "params": params,
+                    "id": "1",
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if "error" in result:
+                raise RuntimeError(f"Agent error: {result['error']}")
+
+            return result.get("result", {})
+
+    async def execute_step(
+        self, step: WorkflowStep, context: WorkflowContext
+    ) -> Dict[str, Any]:
+        """
+        Execute a single workflow step.
+
+        Args:
+            step: WorkflowStep to execute
+            context: Current workflow context
+
+        Returns:
+            Step result
+
+        Raises:
+            ValueError: If agent not found for skill
+            RuntimeError: If step execution fails
+        """
+        print(f"[WorkflowEngine] Executing step: {step.id} (skill: {step.skill})")
+
+        # Resolve input templates
+        resolved_inputs = context.resolve_inputs(step.inputs)
+
+        # Discover agent for skill
+        agent_url = await self.discover_agent_for_skill(step.skill)
+
+        # Call agent
+        try:
+            result = await self.call_agent_skill(
+                agent_url=agent_url,
+                skill_id=step.skill,
+                params=resolved_inputs,
+                timeout=step.timeout or 300,
+            )
+
+            print(f"[WorkflowEngine] Step {step.id} completed successfully")
+            return result
+
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"Step {step.id} timed out after {step.timeout}s")
+        except Exception as e:
+            raise RuntimeError(f"Step {step.id} failed: {str(e)}")
+
+    async def execute_sequential_steps(
+        self, steps: List[WorkflowStep], context: WorkflowContext
+    ) -> WorkflowContext:
+        """
+        Execute steps sequentially in order.
+
+        Args:
+            steps: List of steps to execute
+            context: Workflow context
+
+        Returns:
+            Updated context with all step outputs
+        """
+        for step in steps:
+            result = await self.execute_step(step, context)
+
+            # Store output in context
+            if step.outputs:
+                context.set_step_output(step.id, {step.outputs: result})
+            else:
+                context.set_step_output(step.id, result)
+
+        return context
+
+    async def execute_parallel_steps(
+        self, steps: List[WorkflowStep], context: WorkflowContext
+    ) -> WorkflowContext:
+        """
+        Execute steps in parallel using asyncio.gather.
+
+        Args:
+            steps: List of steps to execute concurrently
+            context: Workflow context
+
+        Returns:
+            Updated context with all step outputs
+        """
+        print(f"[WorkflowEngine] Executing {len(steps)} steps in parallel")
+
+        # Execute all steps concurrently
+        tasks = [self.execute_step(step, context) for step in steps]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Store results in context
+        for step, result in zip(steps, results):
+            if isinstance(result, Exception):
+                raise RuntimeError(f"Step {step.id} failed: {result}")
+
+            if step.outputs:
+                context.set_step_output(step.id, {step.outputs: result})
+            else:
+                context.set_step_output(step.id, result)
+
+        print("[WorkflowEngine] All parallel steps completed")
+        return context
+
+    async def execute_conditional_step(
+        self, step: WorkflowStep, context: WorkflowContext
+    ) -> WorkflowContext:
+        """
+        Execute conditional step (if/else branching).
+
+        Step.branches format:
+        {
+            "if_true": [WorkflowStep, ...],
+            "if_false": [WorkflowStep, ...]
+        }
+
+        Step.condition is evaluated as template expression.
+
+        Args:
+            step: Conditional step
+            context: Workflow context
+
+        Returns:
+            Updated context
+        """
+        if not step.condition:
+            raise ValueError(f"Conditional step {step.id} missing condition")
+
+        if not step.branches:
+            raise ValueError(f"Conditional step {step.id} missing branches")
+
+        # Evaluate condition
+        condition_result = context.resolve_expression(step.condition)
+
+        # Determine which branch to execute
+        if condition_result:
+            branch_steps = step.branches.get("if_true", [])
+            print(
+                f"[WorkflowEngine] Condition true, executing if_true branch "
+                f"({len(branch_steps)} steps)"
+            )
+        else:
+            branch_steps = step.branches.get("if_false", [])
+            print(
+                f"[WorkflowEngine] Condition false, executing if_false branch "
+                f"({len(branch_steps)} steps)"
+            )
+
+        # Execute branch
+        for branch_step_data in branch_steps:
+            branch_step = WorkflowStep(**branch_step_data)
+            result = await self.execute_step(branch_step, context)
+            context.set_step_output(branch_step.id, result)
+
+        return context
+
+    async def execute_switch_step(
+        self, step: WorkflowStep, context: WorkflowContext
+    ) -> WorkflowContext:
+        """
+        Execute switch step (route based on value).
+
+        Step.condition contains the expression to evaluate.
+        Step.branches format:
+        {
+            "case_value_1": [WorkflowStep, ...],
+            "case_value_2": [WorkflowStep, ...],
+            "default": [WorkflowStep, ...]
+        }
+
+        Args:
+            step: Switch step
+            context: Workflow context
+
+        Returns:
+            Updated context
+        """
+        if not step.condition:
+            raise ValueError(f"Switch step {step.id} missing condition expression")
+
+        if not step.branches:
+            raise ValueError(f"Switch step {step.id} missing branches")
+
+        # Evaluate switch expression
+        switch_value = context.resolve_expression(step.condition)
+        print(f"[WorkflowEngine] Switch evaluated to: {switch_value}")
+
+        # Find matching case
+        matched_case = str(switch_value)  # Convert to string for dict lookup
+        branch_steps = step.branches.get(matched_case) or step.branches.get(
+            "default", []
+        )
+
+        if not branch_steps:
+            print(f"[WorkflowEngine] No matching case for '{switch_value}', skipping")
+            return context
+
+        print(
+            f"[WorkflowEngine] Executing case '{matched_case}' "
+            f"({len(branch_steps)} steps)"
+        )
+
+        # Execute matched branch
+        for branch_step_data in branch_steps:
+            branch_step = WorkflowStep(**branch_step_data)
+            result = await self.execute_step(branch_step, context)
+            context.set_step_output(branch_step.id, result)
+
+        return context
+
+    async def execute_workflow(
+        self, workflow: WorkflowDefinition, initial_input: Dict[str, Any]
+    ) -> WorkflowContext:
+        """
+        Execute a complete workflow.
+
+        Args:
+            workflow: WorkflowDefinition to execute
+            initial_input: Initial input data
+
+        Returns:
+            Final workflow context with all step outputs
+        """
+        print(f"[WorkflowEngine] Starting workflow: {workflow.metadata.name}")
+        print(f"[WorkflowEngine] Workflow ID: {workflow.metadata.id}")
+        print(f"[WorkflowEngine] Steps: {len(workflow.steps)}")
+
+        # Initialize context
+        context = WorkflowContext(initial_input)
+
+        # Execute steps
+        for step in workflow.steps:
+            print(
+                f"\n[WorkflowEngine] Processing step: {step.id} "
+                f"(type: {step.step_type})"
+            )
+
+            if step.step_type == StepType.SEQUENTIAL:
+                result = await self.execute_step(step, context)
+                # Store output in context
+                if step.outputs:
+                    context.set_step_output(step.id, {step.outputs: result})
+                else:
+                    context.set_step_output(step.id, result)
+
+            elif step.step_type == StepType.PARALLEL:
+                # For parallel, step.branches should contain list of steps
+                if not step.branches or "steps" not in step.branches:
+                    raise ValueError(
+                        f"Parallel step {step.id} missing 'steps' in branches"
+                    )
+                parallel_steps = [WorkflowStep(**s) for s in step.branches["steps"]]
+                await self.execute_parallel_steps(parallel_steps, context)
+
+            elif step.step_type == StepType.CONDITIONAL:
+                await self.execute_conditional_step(step, context)
+
+            elif step.step_type == StepType.SWITCH:
+                await self.execute_switch_step(step, context)
+
+            else:
+                raise ValueError(f"Unknown step type: {step.step_type}")
+
+        print(f"\n[WorkflowEngine] Workflow completed: {workflow.metadata.name}")
+        return context
