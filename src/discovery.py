@@ -4,8 +4,11 @@ import json
 import httpx
 import subprocess
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from src.workflow_engine import WorkflowDefinition
 
 
 @dataclass
@@ -285,3 +288,67 @@ def list_skills(registry_url: str = "http://localhost:5000") -> List[SkillInfo]:
     skills = discovery.list_all_skills()
     discovery.close()
     return skills
+
+
+# Workflow discovery functions
+
+
+# Cache for discovered workflows
+_workflow_cache: Dict[str, "WorkflowDefinition"] = {}
+
+
+async def discover_workflow(
+    workflow_id: str, version: str = "v1"
+) -> Optional["WorkflowDefinition"]:
+    """
+    Discover and load a workflow from the registry.
+
+    Args:
+        workflow_id: Unique workflow identifier
+        version: Workflow version (default: v1)
+
+    Returns:
+        WorkflowDefinition object, or None if not found
+
+    Example:
+        workflow = await discover_workflow("code-generation", "v1")
+        if workflow:
+            print(f"Found workflow: {workflow.metadata.name}")
+    """
+    from src.workflow_registry import pull_workflow_from_registry
+    from src.workflow_engine import load_workflow_from_yaml
+
+    cache_key = f"{workflow_id}:{version}"
+
+    # Check cache first
+    if cache_key in _workflow_cache:
+        print(f"[Discovery] Workflow {cache_key} found in cache")
+        return _workflow_cache[cache_key]
+
+    print(f"[Discovery] Discovering workflow: {workflow_id}:{version}")
+
+    # Pull from registry
+    workflow_path = pull_workflow_from_registry(workflow_id, version)
+    if not workflow_path:
+        print(f"[Discovery] Workflow {workflow_id}:{version} not found in registry")
+        return None
+
+    try:
+        # Load and validate
+        workflow = load_workflow_from_yaml(workflow_path)
+        print(f"[Discovery] Loaded workflow: {workflow.metadata.name}")
+
+        # Cache it
+        _workflow_cache[cache_key] = workflow
+
+        return workflow
+
+    except Exception as e:
+        print(f"[Discovery] Failed to load workflow: {e}")
+        return None
+
+
+def clear_workflow_cache():
+    """Clear the workflow cache (useful for testing)."""
+    global _workflow_cache
+    _workflow_cache = {}
