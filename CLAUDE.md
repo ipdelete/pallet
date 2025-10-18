@@ -98,16 +98,45 @@ Each SkillDefinition exposes via `/agent-card`:
 ## Project Structure
 
 ```
-src/agents/          Plan/Build/Test agents, BaseAgent class
-src/agent_cards/     Skill definitions (JSON)
-src/orchestrator.py  Plan → Build → Test pipeline
-src/discovery.py     Registry queries, agent lookup
-main.py              CLI entry point
-pyproject.toml       Dependencies
-tests/               Unit, integration, API tests
-specs/               Phase 2-5 specifications
-app/                 Generated outputs (code, plan, review, metadata)
+src/agents/              Plan/Build/Test agents, BaseAgent class
+src/agent_cards/         Skill definitions (JSON)
+src/orchestrator.py      Plan → Build → Test pipeline (Phase 5) + Workflow execution (Phase 6)
+src/discovery.py         Registry queries, agent lookup, workflow discovery
+src/workflow_engine.py   Workflow execution engine (Phase 6)
+src/workflow_registry.py Workflow storage/retrieval (Phase 6)
+main.py                  CLI entry point with --workflow support
+pyproject.toml           Dependencies (includes pyyaml)
+workflows/               Example YAML workflows (code-generation, smart-router, parallel-analysis)
+docs/WORKFLOW_ENGINE.md  Workflow engine documentation (Phase 6)
+tests/                   Unit, integration, API tests (includes workflow tests)
+specs/                   Phase 2-6 specifications
+app/                     Generated outputs (code, plan, review, metadata)
 ```
+
+## Workflow Engine (Phase 6)
+
+The workflow engine decouples workflow definitions from orchestrator code by using declarative YAML files:
+
+**Key Features**:
+- **YAML workflow definitions** with metadata and step specifications
+- **Multiple execution patterns**: sequential, parallel, conditional, switch
+- **Template expressions** for data flow between steps (`{{ steps.X.outputs.Y }}`)
+- **OCI registry storage** with versioning for workflows
+- **Runtime workflow selection** and dynamic routing
+
+**Example Workflows**:
+- `code-generation-v1`: Plan → Build → Test pipeline (default)
+- `smart-router-v1`: Analyze request type → route to specialized workflow
+- `parallel-analysis-v1`: Run multiple agents concurrently
+
+**CLI Usage**:
+```bash
+uv run python main.py "Create hello world"                    # Uses default workflow
+uv run python main.py --workflow code-generation-v1 "..."     # Explicit workflow
+uv run python main.py --workflow smart-router-v1 "..."        # Different workflow
+```
+
+See [docs/WORKFLOW_ENGINE.md](docs/WORKFLOW_ENGINE.md) for complete workflow specification, examples, and templating guide.
 
 ## Testing & Debugging
 
