@@ -1,5 +1,6 @@
 ---
 description: Implement the following plan
+model: claude-sonnet-4-5-20250929
 ---
 
 Follow the `Instructions` to implement the `Plan` then `Report` the completed work.
