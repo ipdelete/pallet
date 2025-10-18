@@ -1,0 +1,617 @@
+# Feature: Workflow-Based Orchestration Engine
+
+## Feature Description
+
+This feature introduces a declarative workflow engine that decouples workflow definitions from the orchestrator implementation. Workflows are defined in YAML files and stored in the OCI registry as versioned artifacts, enabling runtime workflow selection, reusable workflow patterns, and dynamic routing based on request analysis.
+
+The workflow engine supports multiple execution patterns (sequential, parallel, conditional, map-reduce) and uses template expressions to pass data between steps. This makes the orchestrator generic and reusable across different use cases without code changes.
+
+## User Story
+
+As a **developer building AI agent systems**
+I want to **define workflows declaratively in YAML files stored in a registry**
+So that **I can create, version, and deploy new workflows without modifying orchestrator code, and dynamically select workflows at runtime based on request characteristics**
+
+## Problem Statement
+
+Currently, the orchestrator in Phase 5 has hardcoded workflow logic:
+- The Plan → Build → Test pipeline is defined in Python code
+- Adding new workflows requires changing the orchestrator implementation
+- Workflow logic is tightly coupled to the orchestrator
+- No way to version workflows independently of code
+- Cannot dynamically route requests to different workflows based on content
+- Difficult to test workflows in isolation
+- No reusability of common workflow patterns across different use cases
+
+This limits flexibility and makes it difficult to:
+- Experiment with different agent combinations
+- Deploy new workflows without redeploying the orchestrator
+- Share workflows across teams or projects
+- Implement sophisticated routing logic (e.g., analyze request → select appropriate workflow)
+
+## Solution Statement
+
+Implement a workflow engine that:
+
+1. **Parses YAML workflow definitions** containing:
+   - Metadata (id, name, version, description)
+   - Steps with skill IDs, inputs (with template expressions), outputs
+   - Step types (sequential, parallel, conditional, switch)
+   - Error handling configuration
+
+2. **Stores workflows in OCI registry** as versioned artifacts (like agent cards)
+   - Push: `oras push localhost:5000/workflows/{id}:v1 workflow.yaml`
+   - Pull: Discovery mechanism to find and load workflows
+
+3. **Executes workflows dynamically** with:
+   - Context management (passing data between steps)
+   - Template expression resolution (`{{ steps.plan.outputs.result }}`)
+   - Agent discovery per step (using existing discovery module)
+   - Support for multiple execution patterns
+
+4. **Enables workflow routing** where a special workflow can:
+   - Analyze incoming requests
+   - Select the appropriate workflow dynamically
+   - Delegate execution to the selected workflow
+
+This decouples "what to do" (workflows) from "how to do it" (orchestrator), making the system more flexible and maintainable.
+
+## Relevant Files
+
+### Existing Files
+- **`src/orchestrator.py`** - Current hardcoded orchestration logic that will be refactored to use the workflow engine
+- **`src/discovery.py`** - Agent discovery logic that will be extended to discover workflows from registry
+- **`main.py`** - Entry point that will be updated to load workflows and execute them
+- **`pyproject.toml`** - Will need `pyyaml` dependency added for YAML parsing
+- **`src/agent_cards/*.json`** - Example artifacts in registry; workflows will follow similar pattern
+
+### New Files
+
+#### `src/workflow_engine.py`
+Core workflow engine implementation containing:
+- `WorkflowDefinition` - Pydantic model for workflow structure
+- `WorkflowStep` - Represents individual workflow steps
+- `WorkflowContext` - Manages execution state and template resolution
+- `WorkflowEngine` - Main engine class that loads, parses, and executes workflows
+- Step execution methods for sequential, parallel, conditional, and switch patterns
+
+#### `src/workflow_registry.py`
+Workflow storage and retrieval from OCI registry:
+- `push_workflow()` - Push YAML workflow to registry
+- `pull_workflow()` - Pull and parse workflow from registry
+- `list_workflows()` - Discover available workflows
+- `get_workflow_metadata()` - Read workflow metadata without pulling full file
+
+#### `workflows/code-generation.yaml`
+Example workflow for the existing Plan → Build → Test pipeline:
+- Demonstrates sequential execution pattern
+- Uses template expressions for data flow
+- Includes timeout configuration per step
+- Shows error handling configuration
+
+#### `workflows/smart-router.yaml`
+Example meta-workflow for dynamic workflow selection:
+- Analyzes incoming request type
+- Routes to appropriate specialized workflow
+- Demonstrates switch/conditional patterns
+- Includes default fallback behavior
+
+#### `workflows/parallel-analysis.yaml`
+Example parallel workflow:
+- Runs multiple analysis agents simultaneously
+- Demonstrates parallel execution pattern
+- Shows result aggregation strategies
+- Useful for content analysis, validation checks
+
+#### `scripts/push_workflows.sh`
+Bootstrap script to push sample workflows to registry:
+- Creates workflow YAML files
+- Pushes them to registry with ORAS
+- Verifies successful push
+- Lists all workflows in registry
+
+## Implementation Plan
+
+### Phase 1: Foundation - Workflow Data Models and YAML Parsing
+
+Create the core data structures and YAML parsing logic:
+- Define Pydantic models for workflows (WorkflowDefinition, WorkflowStep)
+- Implement YAML loading and validation
+- Create WorkflowContext for managing execution state
+- Implement template expression resolution logic (`{{ variable.path }}` syntax)
+- Add unit tests for data models and expression resolution
+
+### Phase 2: Core Implementation - Workflow Engine
+
+Build the workflow execution engine:
+- Implement WorkflowEngine class with step execution methods
+- Add support for sequential execution (existing pattern)
+- Implement parallel execution with asyncio.gather
+- Add conditional execution with condition evaluation
+- Implement switch/case routing pattern
+- Add agent discovery integration per step
+- Include timeout and basic error handling per step
+
+### Phase 3: Registry Integration - Workflow Storage
+
+Extend registry functionality for workflows:
+- Implement workflow_registry.py with push/pull functions
+- Extend discovery.py to query workflow catalog
+- Add workflow versioning support
+- Create scripts/push_workflows.sh bootstrap script
+- Test end-to-end workflow storage and retrieval
+
+### Phase 4: Example Workflows and Documentation
+
+Create sample workflows and update documentation:
+- Implement code-generation.yaml (existing pipeline)
+- Create smart-router.yaml (dynamic routing)
+- Add parallel-analysis.yaml (parallel pattern example)
+- Create docs/WORKFLOW_ENGINE.md with specification and examples
+- Update README.md to reference workflow-based orchestration
+
+### Phase 5: Orchestrator Refactoring
+
+Refactor existing orchestrator to use workflow engine:
+- Update main.py to accept workflow ID as parameter
+- Modify orchestrator.py to load and execute workflows
+- Maintain backward compatibility with direct workflow specification
+- Add CLI arguments for workflow selection
+- Test with existing agents and workflows
+
+## Step by Step Tasks
+
+### 1. Add Dependencies
+- Add `pyyaml` to pyproject.toml
+- Run `uv sync` to install dependencies
+- Verify import: `python -c "import yaml; print(yaml.__version__)"`
+
+### 2. Create Workflow Data Models (`src/workflow_engine.py` - Part 1)
+- Define `StepType` enum (SEQUENTIAL, PARALLEL, CONDITIONAL, SWITCH)
+- Create `WorkflowStep` dataclass with:
+  - `id`, `skill`, `inputs`, `outputs`, `timeout`, `step_type`, `condition`, `branches`
+- Create `WorkflowDefinition` dataclass with:
+  - `metadata` (id, name, version, description, tags)
+  - `steps` (list of WorkflowStep)
+  - `error_handling` (optional configuration)
+- Add Pydantic validation for required fields
+- Write unit tests for model validation
+
+### 3. Implement WorkflowContext (`src/workflow_engine.py` - Part 2)
+- Create `WorkflowContext` class to manage execution state
+- Implement `set_step_output()` to store step results
+- Implement `resolve_expression()` to parse `{{ path }}` templates
+  - Support `{{ workflow.input.field }}`
+  - Support `{{ steps.step_id.outputs.field }}`
+  - Support nested paths
+- Implement `resolve_inputs()` to resolve all templates in a dict
+- Add unit tests for expression resolution edge cases
+
+### 4. Create WorkflowEngine Class (`src/workflow_engine.py` - Part 3)
+- Implement `load_workflow()` to parse YAML into WorkflowDefinition
+- Add workflow validation (check required fields, step references)
+- Implement `discover_agent_for_skill()` with caching
+- Create `execute_step()` for single step execution:
+  - Resolve input templates
+  - Discover agent for skill
+  - Call agent via JSON-RPC
+  - Return result
+- Add timeout handling per step
+- Write unit tests with mocked agents
+
+### 5. Implement Execution Patterns (`src/workflow_engine.py` - Part 4)
+- Implement `execute_sequential_steps()`:
+  - Loop through steps in order
+  - Pass output from step N to step N+1
+  - Store outputs in context
+- Implement `execute_parallel_steps()`:
+  - Use `asyncio.gather()` for concurrent execution
+  - Collect all results
+  - Merge into context
+- Implement `execute_conditional_step()`:
+  - Evaluate condition expression
+  - Execute if_true or if_false branch
+  - Handle missing condition (default to true/false)
+- Implement `execute_switch_step()`:
+  - Evaluate switch expression
+  - Match against cases
+  - Execute matched workflow or default
+- Add integration tests for each pattern
+
+### 6. Create Main Execution Method (`src/workflow_engine.py` - Part 5)
+- Implement `execute_workflow()`:
+  - Initialize WorkflowContext with initial_input
+  - Iterate through workflow steps
+  - Dispatch to appropriate execution method based on step_type
+  - Store outputs in context after each step
+  - Print progress during execution
+  - Return final context with all step outputs
+- Add comprehensive error messages
+- Write end-to-end test with sample workflow
+
+### 7. Implement Workflow Registry Functions (`src/workflow_registry.py`)
+- Create `push_workflow_to_registry()`:
+  - Use subprocess to call `oras push`
+  - Tag with version
+  - Return success/failure
+- Create `pull_workflow_from_registry()`:
+  - Use subprocess to call `oras pull`
+  - Return path to downloaded YAML
+  - Handle errors gracefully
+- Create `list_workflows()`:
+  - Query registry `/v2/_catalog`
+  - Filter for `workflows/*` repositories
+  - Return list of workflow IDs
+- Create `get_workflow_metadata()`:
+  - Pull workflow and parse metadata only
+  - Don't load full workflow definition
+  - Used for workflow discovery/listing
+- Add unit tests with mocked subprocess calls
+
+### 8. Extend Discovery Module (`src/discovery.py`)
+- Add `discover_workflow()` function:
+  - Query registry for workflows
+  - Pull workflow by ID
+  - Parse and validate YAML
+  - Return WorkflowDefinition object
+- Add caching for discovered workflows
+- Update module docstring to mention workflow discovery
+- Write integration tests with local registry
+
+### 9. Create Example Workflow: Code Generation (`workflows/code-generation.yaml`)
+- Define metadata (id: code-generation-v1, name, version, description)
+- Create sequential pipeline:
+  - Step 1: create_plan skill with requirements input
+  - Step 2: generate_code skill with plan from step 1
+  - Step 3: review_code skill with code from step 2
+- Add template expressions for data flow
+- Set reasonable timeouts per step
+- Include error_handling configuration
+- Validate YAML syntax: `python -c "import yaml; yaml.safe_load(open('workflows/code-generation.yaml'))"`
+
+### 10. Create Example Workflow: Smart Router (`workflows/smart-router.yaml`)
+- Define metadata for routing workflow
+- Create analysis step to detect request type
+- Implement switch step:
+  - Cases: code_generation, data_analysis, content_creation
+  - Each case delegates to different workflow
+  - Include default case
+- Add condition evaluation examples
+- Validate YAML syntax
+
+### 11. Create Example Workflow: Parallel Analysis (`workflows/parallel-analysis.yaml`)
+- Define metadata for parallel processing
+- Create parallel step with multiple branches:
+  - analyze_sentiment
+  - extract_entities
+  - classify_topics
+- Show aggregation strategy (merge results)
+- Include timeout for overall parallel execution
+- Validate YAML syntax
+
+### 12. Create Workflow Push Script (`scripts/push_workflows.sh`)
+- Check ORAS is installed
+- Check registry is running (curl localhost:5000/v2/)
+- For each workflow YAML:
+  - Push to registry: `oras push localhost:5000/workflows/{id}:v1 workflow.yaml:application/yaml`
+  - Verify push succeeded
+  - Print confirmation
+- List all workflows in registry at end
+- Make script executable: `chmod +x scripts/push_workflows.sh`
+- Test script: `bash scripts/push_workflows.sh`
+
+### 13. Update Bootstrap Script (`scripts/bootstrap.sh`)
+- Add workflow push step after agent card push
+- Call `bash scripts/push_workflows.sh`
+- Verify workflows are in registry
+- Update success message to mention workflows
+- Test full bootstrap with workflows
+
+### 14. Refactor Orchestrator (`src/orchestrator.py`)
+- Import WorkflowEngine
+- Add `execute_workflow_by_id()` function:
+  - Discover workflow from registry
+  - Load with WorkflowEngine
+  - Execute with provided inputs
+  - Return results
+- Keep existing `orchestrate()` function for backward compatibility
+- Add workflow_id parameter (optional)
+- Update function to use workflow engine when workflow_id provided
+- Add deprecation notice for hardcoded orchestration
+
+### 15. Update Main Entry Point (`main.py`)
+- Add CLI argument for workflow ID: `--workflow` or `-w`
+- Default to "code-generation-v1" if not specified
+- Load workflow from registry using workflow ID
+- Execute workflow with WorkflowEngine
+- Print results
+- Update help text with workflow examples
+- Test: `uv run python main.py --workflow code-generation-v1 "Create hello world"`
+
+### 16. Create Workflow Engine Documentation (`docs/WORKFLOW_ENGINE.md`)
+- Overview of workflow-based orchestration
+- Benefits over hardcoded workflows
+- YAML workflow specification reference
+- Template expression syntax guide
+- Execution pattern examples (sequential, parallel, conditional, switch)
+- Example workflows with explanations
+- How to create custom workflows
+- Registry operations for workflows
+- Troubleshooting guide
+- Follow structure from existing docs
+
+### 17. Update Main README (`README.md`)
+- Add section on workflow-based orchestration
+- Update "What It Does" to mention workflow engine
+- Add example of custom workflow execution
+- Update architecture diagram to show workflow engine
+- Add workflow files to project structure
+- Link to new WORKFLOW_ENGINE.md documentation
+- Update quick start to mention workflows
+
+### 18. Add Integration Tests
+- Create `tests/test_workflow_engine.py`:
+  - Test workflow loading from YAML
+  - Test sequential execution
+  - Test parallel execution
+  - Test conditional execution
+  - Test template resolution
+  - Test error handling
+- Create `tests/test_workflow_registry.py`:
+  - Test push/pull workflows
+  - Test list workflows
+  - Mock registry responses
+- Create `tests/test_workflows/`:
+  - Sample workflow files for testing
+  - Valid and invalid YAML examples
+- Run tests: `uv run pytest tests/`
+
+### 19. Test End-to-End with Existing Agents
+- Start all services: `bash scripts/bootstrap.sh`
+- List workflows: `python -c "from src.workflow_registry import list_workflows; print(list_workflows())"`
+- Execute code-generation workflow: `uv run python main.py --workflow code-generation-v1 "Create a factorial function"`
+- Verify results in app/ folder
+- Check workflow outputs are correct
+- Test with different workflows
+
+### 20. Run Validation Commands
+- Execute all validation commands listed below
+- Ensure zero errors before marking feature complete
+- Fix any issues that arise
+- Verify backward compatibility with Phase 5
+
+## Testing Strategy
+
+### Manual Testing
+
+1. **Workflow Creation and Push**
+   - Create a new workflow YAML file
+   - Validate YAML syntax
+   - Push to registry with ORAS
+   - Verify it appears in catalog
+
+2. **Workflow Execution**
+   - Execute code-generation workflow with sample requirements
+   - Verify Plan → Build → Test pipeline works
+   - Check outputs are saved correctly
+   - Inspect logs for proper step execution
+
+3. **Parallel Execution**
+   - Execute parallel-analysis workflow
+   - Verify all branches run simultaneously
+   - Check results are properly merged
+   - Measure execution time (should be faster than sequential)
+
+4. **Conditional Routing**
+   - Execute smart-router workflow with different input types
+   - Verify correct workflow is selected based on request type
+   - Test default fallback case
+   - Check condition evaluation logic
+
+5. **Template Resolution**
+   - Inspect workflow context at each step
+   - Verify data flows correctly between steps
+   - Test nested template expressions
+   - Check edge cases (missing keys, null values)
+
+6. **Error Handling**
+   - Test with invalid workflow YAML
+   - Test with missing skills
+   - Test with agent timeout
+   - Verify error messages are helpful
+
+### Edge Cases
+
+- **Empty Workflow**: Workflow with no steps - should handle gracefully
+- **Circular References**: Template referencing non-existent step - should error clearly
+- **Invalid Skill ID**: Step requests skill that doesn't exist - discovery should fail with clear message
+- **Missing Template Variables**: Expression refers to missing data - should return null or error
+- **Agent Timeout**: Step takes longer than timeout - should cancel and report error
+- **Registry Down**: Cannot connect to registry - should fail with connection error
+- **Invalid YAML**: Malformed workflow file - should fail at parse time with line number
+- **Version Conflicts**: Multiple versions of same workflow - should select correct version
+- **Parallel Failures**: One branch fails in parallel execution - should handle partial results
+- **Nested Workflows**: Workflow calling another workflow - should support or explicitly not support
+
+## Acceptance Criteria
+
+- [ ] WorkflowEngine can load and parse YAML workflow definitions
+- [ ] Template expressions (`{{ steps.X.outputs.Y }}`) are resolved correctly
+- [ ] Sequential execution pattern works (current Plan → Build → Test pipeline)
+- [ ] Parallel execution pattern works (multiple agents execute simultaneously)
+- [ ] Conditional execution pattern works (if/else branching)
+- [ ] Switch execution pattern works (route based on value)
+- [ ] Workflows can be pushed to and pulled from OCI registry
+- [ ] Workflow discovery works (list available workflows)
+- [ ] Orchestrator can execute workflows by ID
+- [ ] Main entry point accepts workflow ID as CLI argument
+- [ ] Example workflows (code-generation, smart-router, parallel-analysis) execute successfully
+- [ ] Bootstrap script pushes workflows to registry
+- [ ] Documentation explains workflow engine and YAML specification
+- [ ] README updated with workflow-based orchestration information
+- [ ] Backward compatibility maintained (existing orchestrator still works)
+- [ ] All tests pass
+- [ ] Zero regressions from Phase 5
+
+## Validation Commands
+
+Execute every command to validate the feature works correctly with zero regressions.
+
+```bash
+# 1. Verify Python syntax for all new files
+python -c "import ast; ast.parse(open('src/workflow_engine.py').read())"
+python -c "import ast; ast.parse(open('src/workflow_registry.py').read())"
+
+# 2. Verify YAML syntax for workflow files
+python -c "import yaml; yaml.safe_load(open('workflows/code-generation.yaml'))"
+python -c "import yaml; yaml.safe_load(open('workflows/smart-router.yaml'))"
+python -c "import yaml; yaml.safe_load(open('workflows/parallel-analysis.yaml'))"
+
+# 3. Verify dependencies installed
+uv sync
+python -c "import yaml; print(f'PyYAML {yaml.__version__}')"
+
+# 4. Start all services (includes workflow push)
+bash scripts/bootstrap.sh
+
+# 5. Verify workflows are in registry
+curl -s http://localhost:5000/v2/_catalog | jq '.repositories' | grep workflows
+
+# 6. List workflows programmatically
+python -c "from src.workflow_registry import list_workflows; workflows = list_workflows(); print(f'Found {len(workflows)} workflows'); print(workflows)"
+
+# 7. Execute code-generation workflow (default)
+uv run python main.py "Create a function to calculate prime numbers"
+
+# 8. Execute workflow by explicit ID
+uv run python main.py --workflow code-generation-v1 "Create a hello world function"
+
+# 9. Verify outputs created
+ls -lh app/
+cat app/metadata.json | jq '.workflow_id'
+
+# 10. Test workflow engine directly
+python -c "
+import asyncio
+from src.workflow_engine import WorkflowEngine
+
+async def test():
+    engine = WorkflowEngine()
+    yaml_content = open('workflows/code-generation.yaml').read()
+    workflow = engine.load_workflow(yaml_content)
+    print(f'Loaded: {workflow.metadata[\"name\"]}')
+    print(f'Steps: {len(workflow.steps)}')
+    
+asyncio.run(test())
+"
+
+# 11. Test template resolution
+python -c "
+from src.workflow_engine import WorkflowContext
+
+ctx = WorkflowContext({'test': 'value'})
+ctx.set_step_output('step1', {'result': 'data'})
+resolved = ctx.resolve_expression('{{ steps.step1.outputs.result }}')
+assert resolved == 'data', f'Expected data, got {resolved}'
+print('✓ Template resolution works')
+"
+
+# 12. Run unit tests (if implemented)
+uv run pytest tests/ -v
+
+# 13. Verify backward compatibility - existing orchestration still works
+python -c "
+from src.orchestrator import orchestrate
+print('✓ Backward compatible orchestrate function exists')
+"
+
+# 14. Test workflow push script
+bash scripts/push_workflows.sh
+
+# 15. Verify all services are running
+curl -s http://localhost:8001/agent-card | jq '.name'
+curl -s http://localhost:8002/agent-card | jq '.name'
+curl -s http://localhost:8003/agent-card | jq '.name'
+curl -s http://localhost:5000/v2/_catalog | jq '.repositories | length'
+
+# 16. Verify no Python import errors
+python -c "from src.workflow_engine import WorkflowEngine, WorkflowContext, WorkflowDefinition, WorkflowStep; print('✓ All imports successful')"
+python -c "from src.workflow_registry import push_workflow_to_registry, pull_workflow_from_registry, list_workflows; print('✓ Registry functions import successfully')"
+
+# 17. Stop all services
+bash scripts/kill.sh
+```
+
+## Notes
+
+### Design Decisions
+
+**YAML vs JSON**: YAML chosen for workflows because:
+- More human-readable for complex nested structures
+- Native support for comments
+- Less verbose than JSON for configuration files
+- Widely used in workflow systems (GitHub Actions, Kubernetes, etc.)
+
+**Template Syntax**: Using `{{ variable.path }}` syntax because:
+- Familiar to users of Jinja2, Ansible, GitHub Actions
+- Clear distinction from regular strings
+- Easy to parse with regex
+- Supports nested paths with dot notation
+
+**Registry Storage**: Storing workflows in OCI registry because:
+- Consistent with agent cards (same infrastructure)
+- Built-in versioning (tags)
+- Can use existing ORAS tooling
+- Centralized storage
+- Enables workflow sharing across systems
+
+**Execution Patterns**: Supporting multiple patterns because:
+- Sequential: Most common, existing pattern
+- Parallel: Performance optimization for independent tasks
+- Conditional: Decision trees, error handling
+- Switch: Dynamic routing based on content
+- These cover 95% of orchestration use cases
+
+### Future Enhancements
+
+Not included in this phase but could be added later:
+- **Workflow composition**: Workflows calling other workflows (sub-workflows)
+- **Loop patterns**: Map-reduce, for-each over collections
+- **Advanced error handling**: Retry with exponential backoff, circuit breakers
+- **Workflow scheduling**: Cron-style execution, event triggers
+- **Workflow visualization**: Generate diagrams from YAML
+- **Workflow validation**: Lint workflows for common mistakes
+- **Workflow testing**: Unit test framework for workflows
+- **Performance optimizations**: Parallel discovery, connection pooling
+- **Monitoring**: Metrics, tracing, logging integration
+- **State persistence**: Save workflow state between steps
+- **Human-in-the-loop**: Pause for approval, input during execution
+
+### Migration Path from Phase 5
+
+Existing code continues to work:
+1. Keep `src/orchestrator.py` with hardcoded workflow as fallback
+2. `main.py` defaults to code-generation-v1 workflow if no --workflow specified
+3. Old function signatures remain available (deprecated but functional)
+4. Bootstrap script works with or without workflows
+
+Users can migrate gradually:
+1. Phase 5 → Phase 6: No code changes needed, existing behavior preserved
+2. Opt-in to workflows: Pass --workflow flag to use new engine
+3. Create custom workflows: Add YAML files and push to registry
+4. Eventually deprecate hardcoded orchestration in future phase
+
+### Security Considerations
+
+- **YAML Injection**: Use `yaml.safe_load()` to prevent arbitrary code execution
+- **Template Injection**: Limited expression syntax, no arbitrary Python eval
+- **Registry Access**: No authentication in Phase 6, add in production
+- **Agent Trust**: Assume agents are trusted (same as Phase 5)
+- **Input Validation**: Validate workflow structure before execution
+- **Resource Limits**: Enforce timeouts to prevent infinite loops
+
+---
+
+**Implementation Status**: ⏸️ Planning Complete - Ready for BUILD stage
+
+This specification provides a complete, actionable plan for implementing workflow-based orchestration in the Pallet framework. The feature builds on existing Phase 5 infrastructure while maintaining backward compatibility and adding powerful new capabilities for declarative workflow management.
