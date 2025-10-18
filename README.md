@@ -44,229 +44,126 @@ This means you can add/replace agents without modifying the orchestrator—just 
 
 ### Quick Start
 
-#### 1. Install Dependencies
-
+**1. Setup:**
 ```bash
-# Install Python dependencies with uv
-uv sync
-
-# Install test dependencies (includes invoke)
-uv sync --extra test
-
-# Install Claude CLI (if not already installed)
-# See: https://github.com/anthropics/claude-cli
+uv sync && uv sync --extra test
 npm install -g @anthropic-ai/claude-cli
-
-# Set up Claude API credentials
 export ANTHROPIC_API_KEY="your-api-key-here"
 ```
 
-#### 2. Bootstrap the System (Automated)
-
-The `scripts/bootstrap.sh` script handles all setup automatically:
-
+**2. Bootstrap** (auto-configures everything):
 ```bash
 bash scripts/bootstrap.sh
 ```
+Starts registry (5000), agents (8001-8003), verifies services
 
-This will:
-- ✅ Check all dependencies (Docker, ORAS, uv, jq)
-- ✅ Start the OCI registry (port 5000)
-- ✅ Push agent cards to registry
-- ✅ Start Plan Agent (port 8001)
-- ✅ Start Build Agent (port 8002)
-- ✅ Start Test Agent (port 8003)
-- ✅ Verify all services are running
-- ✅ Print ready-to-use commands
-
-#### 3. Run the Orchestrator
-
-After bootstrap completes, in a new terminal:
-
+**3. Run orchestrator:**
 ```bash
-# With default requirements:
-uv run python main.py
-
-# With custom requirements:
-uv run python main.py "Create a function that calculates Fibonacci numbers"
+uv run python main.py                                          # Default
+uv run python main.py "Create a function that validates email" # Custom
 ```
+Outputs: `app/main.py`, `app/plan.json`, `app/review.json`, `app/metadata.json`
 
-The orchestrator will:
-- Discover all agents from the registry (by skill ID)
-- Chain them together: Plan → Build → Test
-- Save results to `app/` folder:
-  - `app/main.py` - Generated code
-  - `app/plan.json` - Implementation plan
-  - `app/review.json` - Code review
-  - `app/metadata.json` - Pipeline metadata
-
-#### 4. Tear Down the System
-
-To stop all services and clean up:
-
+**4. Tear down:**
 ```bash
-bash scripts/kill.sh              # Stop services, keep logs
-bash scripts/kill.sh --clean-logs # Stop services and remove logs
+bash scripts/kill.sh --clean-logs  # Stop all services, clear logs
+docker rmi registry:2              # Optional: remove Docker image
 ```
 
-This will:
-- ✅ Stop all agents
-- ✅ Stop the OCI registry **container** (removes container, keeps Docker image)
-- ✅ Clear the `app/` folder
-- ✅ Optionally clear logs
+### How Discovery Works
 
-**Note**: The Docker image is retained for fast re-bootstrap. To remove the image:
-```bash
-docker rmi registry:2
-```
+**Setup**: `bash scripts/bootstrap.sh` → agent cards pushed to OCI registry via ORAS
 
-### How Registry-based Discovery Works
+**Runtime**: `uv run python main.py`
+1. Orchestrator asks: "Who has `create_plan` skill?"
+2. Discovery queries registry: get repos → pull agent cards → find matching skill
+3. Returns agent URL (e.g., `http://localhost:8001`)
+4. Repeats for `generate_code` and `review_code` skills
 
-The orchestrator uses a **skill-based discovery** system:
+**Key Benefits**: No hardcoded URLs • Capability-driven • Pluggable • Scalable
 
-**Setup Phase** (`bash scripts/bootstrap.sh`):
-1. Agent cards are **pushed** to OCI registry via `oras push`
-2. Cards remain in registry for lifetime of system
-
-**Runtime Phase** (`uv run python main.py`):
-```
-main.py (entry point) calls:
-  src/orchestrator.py calls:
-    discover_agent("create_plan")
-      ↓
-discovery.py queries registry:
-  1. Get all repositories: registry → ["agents/plan", "agents/build", "agents/test"]
-  2. For each agent, pull agent card from OCI registry using ORAS
-  3. Parse agent card JSON to extract skills
-  4. Search for matching skill ID in agent.skills[]
-  5. Return agent URL if skill found
-      ↓
-src/orchestrator.py gets: "http://localhost:8001"
-```
-
-**Agent Card Format** (stored in OCI registry):
+**Agent Card Format**:
 ```json
 {
   "name": "plan-agent",
   "url": "http://localhost:8001",
-  "skills": [
-    {
-      "id": "create_plan",
-      "description": "Creates structured implementation plans",
-      "input_schema": {...},
-      "output_schema": {...}
-    }
-  ]
+  "skills": [{"id": "create_plan", "description": "...", "input_schema": {...}, "output_schema": {...}}]
 }
 ```
 
-**Why This Matters**:
-- ✅ **No Hardcoded URLs**: Orchestrator discovers agents dynamically
-- ✅ **Capability-driven**: Find agents by what they can do, not their address
-- ✅ **Pluggable**: Add new agents with any skill by updating registry
-- ✅ **Scalable**: Registry stores agent cards as versioned OCI artifacts
-
 ### Architecture
 
-The agents communicate via Google's A2A protocol:
-- **Transport**: HTTP with JSON-RPC 2.0
-- **Discovery**: Registry-based (OCI artifact storage with ORAS)
-- **Communication**: POST requests to `/execute` endpoint
-- **Agent Cards**: JSON specifications stored as versioned artifacts
+**Protocol**: HTTP + JSON-RPC 2.0 | **Discovery**: OCI Registry (ORAS) | **Communication**: `/execute` endpoint
 
-Each agent:
-- Has one or more skills defined in its agent card
-- Inherits from `BaseAgent` class
-- Invokes Claude API via CLI subprocess (`claude` command)
-- Exposes `/agent-card` endpoint for A2A protocol compliance
+**Each agent**:
+- Inherits from `BaseAgent` (provides `/agent-card` and `/execute` endpoints)
+- Implements single skill in `execute_skill()` method
+- Calls Claude API via CLI subprocess: `claude ... -p --dangerously-skip-permissions`
+- Exposes skill definition: id, description, input_schema, output_schema
 
 ### Project Structure
 
 ```
-src/
-├── agents/
-│   ├── base.py              # BaseAgent class (A2A protocol endpoints)
-│   ├── plan_agent.py        # Plan Agent (create_plan skill)
-│   ├── build_agent.py       # Build Agent (generate_code skill)
-│   └── test_agent.py        # Test Agent (review_code skill)
-├── agent_cards/
-│   ├── plan_agent_card.json      # Plan agent skill definitions
-│   ├── build_agent_card.json     # Build agent skill definitions
-│   └── test_agent_card.json      # Test agent skill definitions
-├── orchestrator.py          # Core orchestration logic (Phase 5)
-├── discovery.py             # Registry discovery module
-└── cli_discover.py          # CLI for querying registry
-
-specs/
-├── phase2.md               # Three Minimal Agents specification
-├── phase3.md               # Registry Operations specification
-├── phase4.md               # Discovery specification
-└── phase5.md               # Orchestration specification
-
-main.py                    # Entry point (thin wrapper)
-pyproject.toml             # Dependencies
-README.md                  # This file
-app/                       # Generated code output folder
+src/agents/           Plan, Build, Test agents + BaseAgent class
+src/agent_cards/      Skill definitions (JSON)
+src/orchestrator.py   Plan → Build → Test pipeline
+src/discovery.py      Registry queries, agent lookup by skill
+main.py               CLI entry point
+tests/                Unit, integration, API tests (151 tests, 87% coverage)
+specs/                Phase 2-5 specifications
+app/                  Output: main.py, plan.json, review.json, metadata.json
 ```
 
-### Key Files for Discovery
+### Key Components
 
-| File | Purpose |
-|------|---------|
-| `src/discovery.py` | **RegistryDiscovery class** - queries registry, pulls agent cards, finds agents by skill ID |
-| `src/orchestrator.py` | Core orchestration logic - uses `discover_agent()` to look up agents by skill ID |
-| `main.py` | Entry point - delegates to `src/orchestrator.py` |
-| `src/agent_cards/*.json` | Agent card definitions stored in OCI registry |
-| `src/agents/base.py` | Agents expose `/agent-card` endpoint for A2A protocol compliance |
+| Component | Role |
+|-----------|------|
+| `src/agents/base.py` | **BaseAgent**: FastAPI setup, `/agent-card` and `/execute` endpoints, Claude CLI wrapper |
+| `src/orchestrator.py` | Chains agents, discovers by skill ID, saves outputs |
+| `src/discovery.py` | Queries registry, pulls agent cards, finds agents by skill |
+| `main.py` | Delegates to orchestrator |
 
 ### Dependencies
 
-- **fastapi**: Web framework for agents
-- **uvicorn**: ASGI server for FastAPI
-- **httpx**: Async HTTP client for agent communication
-- **pydantic**: Data validation
-- **oras**: OCI Registry as Storage (for pulling agent cards)
-- **docker**: For running the OCI registry
+| Package | Purpose |
+|---------|---------|
+| `fastapi`, `uvicorn` | Agent web servers (A2A endpoints) |
+| `httpx` | Async HTTP for agent-to-agent calls |
+| `pydantic` | Data validation |
+| `oras` | Pull agent cards from OCI registry |
+| `docker` | Run OCI registry container |
 
-### System Requirements
+### Requirements
 
-- **claude** CLI: Must be installed and in PATH for agents to invoke Claude API
-- **ANTHROPIC_API_KEY**: Environment variable with valid Claude API key (for claude CLI)
+- `claude` CLI (in PATH): `npm install -g @anthropic-ai/claude-cli`
+- `ANTHROPIC_API_KEY` environment variable
 
-### Code Quality & Testing
+### Testing & Linting
 
-The project includes tools for linting, formatting, and testing:
-
+**Linting:**
 ```bash
-# Code formatting with black
-uv run invoke lint.black
-
-# Check if code needs formatting
-uv run invoke lint.black-check
-
-# Run flake8 style checker
-uv run invoke lint.flake8
-
-# Run all tests (default: skip slow and e2e tests)
-uv run invoke test
-
-# Run specific test categories
-uv run invoke test.unit              # Unit tests only
-uv run invoke test.integration       # Integration tests only
-uv run invoke test.api               # API endpoint tests only
-
-# Generate coverage reports
-uv run invoke test.coverage          # All formats (HTML, terminal, XML)
-uv run invoke test.coverage-html     # HTML only
-uv run invoke test.coverage-term     # Terminal only
+uv run invoke lint.black        # Format code
+uv run invoke lint.black-check  # Check formatting
+uv run invoke lint.flake8       # Style check
 ```
 
-For detailed testing information, see [tests/README.md](tests/README.md).
+**Testing** (151 tests, 87% coverage):
+```bash
+uv run invoke test              # All (default: skips slow/e2e)
+uv run invoke test.unit         # Unit only
+uv run invoke test.integration  # Integration only
+uv run invoke test.api          # API endpoints only
+uv run invoke test.coverage     # All coverage formats (HTML, terminal, XML)
+uv run invoke test.debug        # Drop to pdb on failure
+```
 
-### For More Information
+See [tests/README.md](tests/README.md) for full invoke tasks reference.
 
-- [tests/README.md](tests/README.md) - Comprehensive test suite documentation
-- [specs/phase5.md](specs/phase5.md) - Orchestration with dynamic discovery
-- [specs/phase4.md](specs/phase4.md) - Registry discovery system
+### Learn More
+
+- [tests/README.md](tests/README.md) - Test suite documentation
+- [specs/phase5.md](specs/phase5.md) - Orchestration & discovery
+- [specs/phase4.md](specs/phase4.md) - Discovery system
 - [specs/phase3.md](specs/phase3.md) - Registry operations
 - [specs/phase2.md](specs/phase2.md) - Three agent architecture
+- [CLAUDE.md](CLAUDE.md) - Claude Code guidance
