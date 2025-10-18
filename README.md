@@ -50,6 +50,9 @@ This means you can add/replace agents without modifying the orchestrator—just 
 # Install Python dependencies with uv
 uv sync
 
+# Install test dependencies (includes invoke)
+uv sync --extra test
+
 # Install Claude CLI (if not already installed)
 # See: https://github.com/anthropics/claude-cli
 npm install -g @anthropic-ai/claude-cli
@@ -230,8 +233,39 @@ app/                       # Generated code output folder
 - **claude** CLI: Must be installed and in PATH for agents to invoke Claude API
 - **ANTHROPIC_API_KEY**: Environment variable with valid Claude API key (for claude CLI)
 
+### Code Quality & Testing
+
+The project includes tools for linting, formatting, and testing:
+
+```bash
+# Code formatting with black
+uv run invoke lint.black
+
+# Check if code needs formatting
+uv run invoke lint.black-check
+
+# Run flake8 style checker
+uv run invoke lint.flake8
+
+# Run all tests (default: skip slow and e2e tests)
+uv run invoke test
+
+# Run specific test categories
+uv run invoke test.unit              # Unit tests only
+uv run invoke test.integration       # Integration tests only
+uv run invoke test.api               # API endpoint tests only
+
+# Generate coverage reports
+uv run invoke test.coverage          # All formats (HTML, terminal, XML)
+uv run invoke test.coverage-html     # HTML only
+uv run invoke test.coverage-term     # Terminal only
+```
+
+For detailed testing information, see [tests/README.md](tests/README.md).
+
 ### For More Information
 
+- [tests/README.md](tests/README.md) - Comprehensive test suite documentation
 - [specs/phase5.md](specs/phase5.md) - Orchestration with dynamic discovery
 - [specs/phase4.md](specs/phase4.md) - Registry discovery system
 - [specs/phase3.md](specs/phase3.md) - Registry operations

@@ -251,7 +251,43 @@ app/                 # Generated code output folder
 
 ## Testing Tips
 
-### Quick Setup & Testing Loop
+### Running Tests and Linting with Invoke (Recommended)
+
+The project uses Invoke for convenient test and linting task management. First, discover available tasks:
+
+```bash
+# Install test dependencies (includes invoke)
+uv sync --extra test
+
+# List all available tasks
+uv run invoke --list
+
+# Code Quality & Linting
+uv run invoke lint.black             # Format code with black
+uv run invoke lint.black-check       # Check if code needs formatting
+uv run invoke lint.flake8            # Run flake8 style checker
+
+# Run all tests (default)
+uv run invoke test
+
+# Run specific test categories
+uv run invoke test.unit              # Unit tests only
+uv run invoke test.integration       # Integration tests only
+uv run invoke test.api               # API endpoint tests only
+
+# Generate coverage reports
+uv run invoke test.coverage-html     # Generate HTML report (htmlcov/index.html)
+uv run invoke test.coverage-term     # Show coverage in terminal
+uv run invoke test.coverage          # All three formats (HTML, terminal, XML)
+
+# Debugging tests
+uv run invoke test.debug             # Drop into pdb on failure
+uv run invoke test.verbose           # Verbose output
+```
+
+For complete invoke task documentation, see [tests/README.md](tests/README.md#invoke-tasks-reference).
+
+### Quick Setup & Testing Loop (Full Pipeline)
 
 ```bash
 # Bootstrap everything (5-10 seconds)

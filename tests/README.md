@@ -2,7 +2,44 @@
 
 Comprehensive test coverage for the Pallet A2A agent orchestration framework.
 
-## Quick Start
+## Quick Start with Invoke (Recommended)
+
+The project uses [Invoke](https://www.pyinvoke.org/) for convenient test and linting task management:
+
+```bash
+# Install test dependencies (includes invoke)
+uv sync --extra test
+
+# List all available tasks
+uv run invoke --list
+
+# Code Quality & Linting
+uv run invoke lint.black             # Format code with black
+uv run invoke lint.black-check       # Check if formatting is needed
+uv run invoke lint.flake8            # Run flake8 style checker
+
+# Run all tests (default)
+uv run invoke test
+
+# Run specific test categories
+uv run invoke test.unit              # Unit tests only
+uv run invoke test.integration       # Integration tests only
+uv run invoke test.api               # API endpoint tests only
+
+# Coverage reports
+uv run invoke test.coverage-html     # Generate HTML coverage report
+uv run invoke test.coverage-term     # Show coverage in terminal
+uv run invoke test.coverage-xml      # Generate XML coverage (for CI)
+uv run invoke test.coverage          # All three formats
+
+# Debugging
+uv run invoke test.debug             # Drop into debugger on failure
+uv run invoke test.verbose           # Verbose output
+```
+
+## Direct pytest Commands
+
+You can also run pytest directly:
 
 ```bash
 # Install test dependencies
@@ -139,9 +176,75 @@ Tests are marked for selective execution:
 - `@pytest.mark.e2e` - End-to-end tests (require services)
 - `@pytest.mark.slow` - Slow-running tests
 
+## Invoke Tasks Reference
+
+### Linting & Code Quality
+
+| Task | Command | Purpose |
+|------|---------|---------|
+| Format code | `uv run invoke lint.black` | Format code with black formatter |
+| Check formatting | `uv run invoke lint.black-check` | Check if code needs black formatting |
+| Style check | `uv run invoke lint.flake8` | Run flake8 style checker |
+
+### Common Test Tasks
+
+| Task | Command | Purpose |
+|------|---------|---------|
+| Default (all tests) | `uv run invoke test` | Run all tests excluding slow and e2e |
+| Unit tests | `uv run invoke test.unit` | Unit tests only |
+| Integration tests | `uv run invoke test.integration` | Integration tests only |
+| API tests | `uv run invoke test.api` | API endpoint tests only |
+| Verbose output | `uv run invoke test.verbose` | Show verbose test output |
+| Show prints | `uv run invoke test.show-output` | Display print statements during tests |
+
+### Coverage Tasks
+
+| Task | Command | Purpose |
+|------|---------|---------|
+| HTML coverage | `uv run invoke test.coverage-html` | Generate HTML report in `htmlcov/` |
+| Terminal coverage | `uv run invoke test.coverage-term` | Show coverage with missing lines |
+| XML coverage | `uv run invoke test.coverage-xml` | Generate XML for CI systems |
+| All coverage | `uv run invoke test.coverage` | Generate all three formats |
+| With coverage | `uv run invoke test.all-with-coverage` | Run tests with coverage display |
+
+### Debug & Troubleshooting Tasks
+
+| Task | Command | Purpose |
+|------|---------|---------|
+| Debugger mode | `uv run invoke test.debug` | Drop into pdb on test failure |
+| Long traceback | `uv run invoke test.long-traceback` | Show full traceback output |
+| Stop first failure | `uv run invoke test.stop-first-failure` | Stop at first failing test |
+| Show locals | `uv run invoke test.show-locals` | Display local variables in traceback |
+| Debug logs | `uv run invoke test.debug-logs` | Show DEBUG-level log output |
+
+### Specialized Runs
+
+| Task | Command | Purpose |
+|------|---------|---------|
+| Skip slow | `uv run invoke test.skip-slow` | Exclude slow-running tests |
+| Skip e2e | `uv run invoke test.skip-e2e` | Exclude end-to-end tests |
+| Unit + Integration | `uv run invoke test.unit-integration` | Run unit and integration, skip slow |
+| CI mode | `uv run invoke test.ci` | Run all tests with XML coverage for CI |
+
+### Running Specific Tests
+
+```bash
+# Run specific test file
+uv run invoke test.specific --file tests/unit/test_base_agent.py
+
+# Run specific test class
+uv run invoke test.specific --file tests/unit/test_base_agent.py --name TestAgentCardEndpoint
+
+# Run specific test function
+uv run invoke test.specific --name test_get_agent_card
+
+# Run tests matching pattern with debug logs
+uv run invoke test.debug-specific --pattern test_get_agent_card
+```
+
 ## Running Tests
 
-### Basic Commands
+### Basic Commands (Direct pytest)
 
 ```bash
 # Run all tests (excluding slow and e2e by default)
