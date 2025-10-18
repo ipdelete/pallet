@@ -187,3 +187,50 @@ def mock_oras_pull(tmp_path, sample_agent_card):
         return 0  # Success return code
 
     return _mock_oras
+
+
+@pytest.fixture
+def sample_workflow_yaml():
+    """Sample valid workflow YAML."""
+    return """
+metadata:
+  id: test-workflow-v1
+  name: Test Workflow
+  version: 1.0.0
+  description: A test workflow
+steps:
+  - id: step1
+    skill: create_plan
+    inputs:
+      requirements: "{{ workflow.input.requirements }}"
+    timeout: 300
+  - id: step2
+    skill: generate_code
+    inputs:
+      plan: "{{ steps.step1.outputs.result }}"
+    timeout: 600
+"""
+
+
+@pytest.fixture
+def sample_workflow_definition():
+    """Sample WorkflowDefinition object."""
+    from src.workflow_engine import WorkflowDefinition, WorkflowMetadata, WorkflowStep
+
+    return WorkflowDefinition(
+        metadata=WorkflowMetadata(
+            id="test-workflow-v1", name="Test Workflow", version="1.0.0"
+        ),
+        steps=[
+            WorkflowStep(
+                id="step1",
+                skill="create_plan",
+                inputs={"requirements": "{{ workflow.input.requirements }}"},
+            ),
+            WorkflowStep(
+                id="step2",
+                skill="generate_code",
+                inputs={"plan": "{{ steps.step1.outputs.result }}"},
+            ),
+        ],
+    )
