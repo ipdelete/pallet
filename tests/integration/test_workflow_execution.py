@@ -511,3 +511,96 @@ steps:
                 # Check that step3 received step2's output
                 call_args_step3 = mock_call.call_args_list[2][1]["params"]
                 assert call_args_step3["value"] == {"processed": "value2"}
+
+
+class TestOrchestratorIntegration:
+    """Integration tests for orchestrator workflow execution."""
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_by_id_integration(self):
+        """Test orchestrator workflow execution by ID."""
+        from pathlib import Path
+        from src.orchestrator import execute_workflow_by_id
+
+        # Create a simple test workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            # Mock workflow discovery
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
+                with patch(
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            {"title": "Test Plan", "steps": ["step1"]},
+                            {"code": "def test(): pass", "language": "python"},
+                            {"quality_score": 85, "approved": True},
+                        ]
+                    ),
+                ):
+                    result = await execute_workflow_by_id(
+                        "code-generation-v1", {"requirements": "test"}
+                    )
+
+                    assert result["workflow_id"] == "code-generation-v1"
+                    assert "step_outputs" in result
+                    assert "final_output" in result
+                    assert "plan" in result["step_outputs"]
+                    assert "build" in result["step_outputs"]
+                    assert "test" in result["step_outputs"]
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_by_id_not_found(self):
+        """Test orchestrator raises error for missing workflow."""
+        from src.orchestrator import execute_workflow_by_id
+
+        with patch("src.orchestrator.discover_workflow", return_value=None):
+            with pytest.raises(ValueError, match="Workflow not found"):
+                await execute_workflow_by_id(
+                    "nonexistent-workflow", {"requirements": "test"}
+                )
+
+    @pytest.mark.asyncio
+    async def test_orchestrate_backward_compatibility(self):
+        """Test legacy orchestrate() function still works."""
+        from src.orchestrator import orchestrate
+        from pathlib import Path
+
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
+                with patch(
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            {"title": "Test Plan"},
+                            {"code": "def test(): pass", "language": "python"},
+                            {"quality_score": 90, "approved": True},
+                        ]
+                    ),
+                ):
+                    result = await orchestrate("test requirements")
+
+                    # Check legacy format
+                    assert "plan" in result
+                    assert "code" in result
+                    assert "review" in result
+                    assert "metadata" in result
+                    assert result["metadata"]["workflow_id"] == "code-generation-v1"

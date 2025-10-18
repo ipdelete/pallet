@@ -1,0 +1,35 @@
+metadata:
+  id: code-generation-v1
+  name: Code Generation Pipeline
+  version: 1.0.0
+  description: "Plan → Build → Test pipeline for code generation"
+  tags:
+    - code-generation
+    - sequential
+    - default
+
+steps:
+  - id: plan
+    skill: create_plan
+    inputs:
+      requirements: "{{ workflow.input.requirements }}"
+    outputs: result
+    timeout: 300
+    step_type: sequential
+
+  - id: build
+    skill: generate_code
+    inputs:
+      plan: "{{ steps.plan.outputs.result }}"
+    outputs: result
+    timeout: 600
+    step_type: sequential
+
+  - id: test
+    skill: review_code
+    inputs:
+      code: "{{ steps.build.outputs.result.code }}"
+      language: "{{ steps.build.outputs.result.language }}"
+    outputs: result
+    timeout: 300
+    step_type: sequential

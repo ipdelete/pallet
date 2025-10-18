@@ -42,6 +42,22 @@ Results (saved to app/ folder)
 
 This means you can add/replace agents without modifying the orchestrator—just update the registry!
 
+### Workflow-Based Orchestration
+
+Pallet uses a **declarative workflow engine** that separates workflow definitions from code:
+
+- **Workflows are YAML files** stored in the OCI registry
+- **Runtime workflow selection** based on requirements
+- **Multiple execution patterns**: sequential, parallel, conditional, switch
+- **Template expressions** for data flow between steps
+
+Example workflows:
+- `code-generation-v1`: Plan → Build → Test (default)
+- `smart-router-v1`: Analyze request type → route to appropriate workflow
+- `parallel-analysis-v1`: Run multiple analyses concurrently
+
+See [docs/WORKFLOW_ENGINE.md](docs/WORKFLOW_ENGINE.md) for full documentation.
+
 ### Quick Start
 
 **1. Setup:**
@@ -106,11 +122,14 @@ docker rmi registry:2              # Optional: remove Docker image
 ```
 src/agents/           Plan, Build, Test agents + BaseAgent class
 src/agent_cards/      Skill definitions (JSON)
-src/orchestrator.py   Plan → Build → Test pipeline
-src/discovery.py      Registry queries, agent lookup by skill
-main.py               CLI entry point
-tests/                Unit, integration, API tests (151 tests, 87% coverage)
-specs/                Phase 2-5 specifications
+src/orchestrator.py   Workflow-based orchestration + legacy pipeline
+src/discovery.py      Registry queries, agent & workflow lookup
+src/workflow_engine/  Workflow execution engine (data models, execution, registry)
+workflows/            Example workflow definitions (YAML)
+docs/WORKFLOW_ENGINE.md  Workflow engine documentation
+main.py               CLI entry point (with --workflow flag)
+tests/                Unit, integration, API tests (151+ tests, 87% coverage)
+specs/                Phase 2-6 specifications
 app/                  Output: main.py, plan.json, review.json, metadata.json
 ```
 

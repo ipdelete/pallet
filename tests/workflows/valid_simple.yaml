@@ -1,0 +1,9 @@
+metadata:
+  id: test-simple
+  name: Simple Test Workflow
+  version: 1.0.0
+steps:
+  - id: step1
+    skill: test_skill
+    inputs:
+      data: "{{ workflow.input.test }}"

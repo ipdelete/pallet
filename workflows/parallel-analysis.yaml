@@ -1,0 +1,46 @@
+metadata:
+  id: parallel-analysis-v1
+  name: Parallel Code Analysis
+  version: 1.0.0
+  description: "Run multiple analysis tasks in parallel"
+  tags:
+    - parallel
+    - analysis
+    - performance
+
+steps:
+  - id: parallel_analyze
+    step_type: parallel
+    branches:
+      steps:
+        - id: analyze_quality
+          skill: review_code
+          inputs:
+            code: "{{ workflow.input.code }}"
+            language: "{{ workflow.input.language }}"
+          outputs: quality_result
+          timeout: 300
+
+        - id: analyze_security
+          skill: security_scan
+          inputs:
+            code: "{{ workflow.input.code }}"
+          outputs: security_result
+          timeout: 300
+
+        - id: analyze_performance
+          skill: performance_check
+          inputs:
+            code: "{{ workflow.input.code }}"
+          outputs: performance_result
+          timeout: 300
+
+  - id: aggregate
+    skill: aggregate_results
+    inputs:
+      quality: "{{ steps.analyze_quality.outputs.quality_result }}"
+      security: "{{ steps.analyze_security.outputs.security_result }}"
+      performance: "{{ steps.analyze_performance.outputs.performance_result }}"
+    outputs: result
+    timeout: 60
+    step_type: sequential

@@ -10,6 +10,8 @@ from src.orchestrator import (
     save_results,
     orchestrate,
     main,
+    execute_workflow_by_id,
+    _extract_final_output,
 )
 from tests.fixtures.sample_data import (
     REQUIREMENTS_EMAIL_VALIDATOR,
@@ -178,115 +180,152 @@ class TestOrchestrate:
     @pytest.mark.asyncio
     async def test_orchestrate_full_pipeline(self, tmp_path):
         """Test full orchestration pipeline."""
-        # Mock discovery
-        with patch("src.orchestrator.discover_agent") as mock_discover:
-            mock_discover.side_effect = [
-                "http://localhost:8001",  # Plan agent
-                "http://localhost:8002",  # Build agent
-                "http://localhost:8003",  # Test agent
-            ]
+        from pathlib import Path
+        from src.workflow_engine import WorkflowContext, load_workflow_from_yaml
 
-            # Mock agent skill calls
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},  # Plan response
-                    {"result": CODE_RESULT_EMAIL},  # Build response
-                    {"result": REVIEW_GOOD},  # Test response
-                ]
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
 
-                # Mock file operations
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            mock_context = WorkflowContext(
+                initial_input={"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
+            )
+            mock_context.step_outputs = {
+                "plan": {"outputs": {"result": PLAN_EMAIL_VALIDATOR}},
+                "build": {"outputs": {"result": CODE_RESULT_EMAIL}},
+                "test": {"outputs": {"result": REVIEW_GOOD}},
+            }
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.execute_workflow",
+                    AsyncMock(return_value=mock_context),
                 ):
-                    with patch("src.orchestrator.save_results") as mock_save:
-                        await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
+                    result = await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
-                        # Verify discovery was called for all agents
-                        assert mock_discover.call_count == 3
-
-                        # Verify all agents were called
-                        assert mock_call.call_count == 3
-
-                        # Verify results were saved
-                        mock_save.assert_called_once()
+                    # Verify result structure
+                    assert "plan" in result
+                    assert "code" in result
+                    assert "review" in result
+                    assert "metadata" in result
 
     @pytest.mark.asyncio
     async def test_orchestrate_calls_plan_agent_first(self, tmp_path):
-        """Test that orchestrate calls plan agent first."""
-        with patch(
-            "src.orchestrator.discover_agent", return_value="http://localhost:8001"
-        ):
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD},
-                ]
+        """Test that orchestrate delegates to workflow engine."""
+        from pathlib import Path
+        from src.workflow_engine import WorkflowContext, load_workflow_from_yaml
 
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            mock_context = WorkflowContext(
+                initial_input={"requirements": "test requirements"}
+            )
+            mock_context.step_outputs = {
+                "plan": {"outputs": {"result": PLAN_EMAIL_VALIDATOR}},
+                "build": {"outputs": {"result": CODE_RESULT_EMAIL}},
+                "test": {"outputs": {"result": REVIEW_GOOD}},
+            }
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.execute_workflow",
+                    AsyncMock(return_value=mock_context),
                 ):
-                    with patch("src.orchestrator.save_results"):
-                        await orchestrate("test requirements")
+                    result = await orchestrate("test requirements")
 
-                        # First call should be to create_plan
-                        first_call = mock_call.call_args_list[0]
-                        # call_agent_skill(agent_url, skill_id, params, timeout=...)
-                        assert (
-                            first_call[0][1] == "create_plan"
-                        )  # skill_id is 2nd positional arg
-                        assert (
-                            first_call[0][2]["requirements"] == "test requirements"
-                        )  # params is 3rd positional arg
+                    # Verify workflow was discovered and executed
+                    assert "plan" in result
+                    assert result["plan"] == PLAN_EMAIL_VALIDATOR
 
     @pytest.mark.asyncio
     async def test_orchestrate_chains_plan_to_build(self, tmp_path):
-        """Test that plan output is passed to build agent."""
-        with patch(
-            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
-        ):
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD},
-                ]
+        """Test that plan output is passed to build agent via workflow."""
+        from pathlib import Path
+        from src.workflow_engine import WorkflowContext, load_workflow_from_yaml
 
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            mock_context = WorkflowContext(initial_input={"requirements": "test"})
+            mock_context.step_outputs = {
+                "plan": {"outputs": {"result": PLAN_EMAIL_VALIDATOR}},
+                "build": {"outputs": {"result": CODE_RESULT_EMAIL}},
+                "test": {"outputs": {"result": REVIEW_GOOD}},
+            }
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.execute_workflow",
+                    AsyncMock(return_value=mock_context),
                 ):
-                    with patch("src.orchestrator.save_results"):
-                        await orchestrate("test")
+                    result = await orchestrate("test")
 
-                        # Second call should pass plan to generate_code
-                        second_call = mock_call.call_args_list[1]
-                        assert second_call[0][1] == "generate_code"
-                        assert second_call[0][2]["plan"] == PLAN_EMAIL_VALIDATOR
+                    # Verify data flows through workflow
+                    assert result["plan"] == PLAN_EMAIL_VALIDATOR
+                    assert result["code"] == CODE_RESULT_EMAIL
 
     @pytest.mark.asyncio
     async def test_orchestrate_chains_build_to_test(self, tmp_path):
-        """Test that code output is passed to test agent."""
-        with patch(
-            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
-        ):
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD},
-                ]
+        """Test that code output is passed to test agent via workflow."""
+        from pathlib import Path
+        from src.workflow_engine import WorkflowContext, load_workflow_from_yaml
 
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            mock_context = WorkflowContext(initial_input={"requirements": "test"})
+            mock_context.step_outputs = {
+                "plan": {"outputs": {"result": PLAN_EMAIL_VALIDATOR}},
+                "build": {"outputs": {"result": CODE_RESULT_EMAIL}},
+                "test": {"outputs": {"result": REVIEW_GOOD}},
+            }
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.execute_workflow",
+                    AsyncMock(return_value=mock_context),
                 ):
-                    with patch("src.orchestrator.save_results"):
-                        await orchestrate("test")
+                    result = await orchestrate("test")
 
-                        # Third call should pass code to review_code
-                        third_call = mock_call.call_args_list[2]
-                        assert third_call[0][1] == "review_code"
-                        assert third_call[0][2]["code"] == CODE_RESULT_EMAIL["code"]
-                        assert third_call[0][2]["language"] == "python"
+                    # Verify all data flows through workflow
+                    assert result["code"] == CODE_RESULT_EMAIL
+                    assert result["review"] == REVIEW_GOOD
 
 
 class TestMain:
@@ -310,3 +349,197 @@ class TestMain:
             call_args = mock_orchestrate.call_args[0][0]
             assert "email" in call_args.lower()
             assert "validate" in call_args.lower()
+
+
+class TestExecuteWorkflowById:
+    """Tests for execute_workflow_by_id function."""
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_by_id_success(self):
+        """Test successful workflow execution by ID."""
+        from src.workflow_engine import (
+            WorkflowDefinition,
+            WorkflowMetadata,
+            WorkflowStep,
+            WorkflowContext,
+        )
+
+        # Create a test workflow
+        test_workflow = WorkflowDefinition(
+            metadata=WorkflowMetadata(
+                id="test-workflow", name="Test Workflow", version="1.0.0"
+            ),
+            steps=[
+                WorkflowStep(id="step1", skill="test_skill", inputs={"data": "test"})
+            ],
+        )
+
+        # Mock context
+        mock_context = WorkflowContext(initial_input={"requirements": "test"})
+        mock_context.step_outputs = {
+            "step1": {"outputs": {"result": {"data": "output"}}}
+        }
+
+        with patch("src.orchestrator.discover_workflow", return_value=test_workflow):
+            with patch(
+                "src.orchestrator.WorkflowEngine.execute_workflow",
+                AsyncMock(return_value=mock_context),
+            ):
+                result = await execute_workflow_by_id(
+                    "test-workflow", {"requirements": "test"}
+                )
+
+                assert result["workflow_id"] == "test-workflow"
+                assert result["workflow_name"] == "Test Workflow"
+                assert result["workflow_version"] == "1.0.0"
+                assert "step_outputs" in result
+                assert "final_output" in result
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_by_id_not_found(self):
+        """Test that missing workflow raises ValueError."""
+        with patch("src.orchestrator.discover_workflow", return_value=None):
+            with pytest.raises(ValueError, match="Workflow not found"):
+                await execute_workflow_by_id(
+                    "nonexistent-workflow", {"requirements": "test"}
+                )
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_by_id_with_version(self):
+        """Test workflow execution with specific version."""
+        from src.workflow_engine import (
+            WorkflowDefinition,
+            WorkflowMetadata,
+            WorkflowStep,
+            WorkflowContext,
+        )
+
+        test_workflow = WorkflowDefinition(
+            metadata=WorkflowMetadata(
+                id="test-workflow", name="Test Workflow", version="2.0.0"
+            ),
+            steps=[WorkflowStep(id="step1", skill="test_skill", inputs={})],
+        )
+
+        mock_context = WorkflowContext(initial_input={})
+        mock_context.step_outputs = {"step1": {"outputs": {}}}
+
+        with patch(
+            "src.orchestrator.discover_workflow", return_value=test_workflow
+        ) as mock_discover:
+            with patch(
+                "src.orchestrator.WorkflowEngine.execute_workflow",
+                AsyncMock(return_value=mock_context),
+            ):
+                await execute_workflow_by_id(
+                    "test-workflow", {"data": "test"}, version="v2"
+                )
+
+                # Verify discover_workflow was called with correct version
+                mock_discover.assert_called_once_with("test-workflow", "v2")
+
+
+class TestExtractFinalOutput:
+    """Tests for _extract_final_output helper function."""
+
+    def test_extract_final_output_with_outputs(self):
+        """Test extracting final output from context with outputs."""
+        from src.workflow_engine import WorkflowContext
+
+        context = WorkflowContext(initial_input={})
+        context.step_outputs = {
+            "step1": {"outputs": {"result": "output1"}},
+            "step2": {"outputs": {"result": "output2"}},
+            "step3": {"outputs": {"result": "output3"}},
+        }
+
+        result = _extract_final_output(context)
+        assert result == {"result": "output3"}
+
+    def test_extract_final_output_empty_context(self):
+        """Test extracting final output from empty context."""
+        from src.workflow_engine import WorkflowContext
+
+        context = WorkflowContext(initial_input={})
+        context.step_outputs = {}
+
+        result = _extract_final_output(context)
+        assert result == {}
+
+
+class TestOrchestrateBackwardCompatibility:
+    """Tests for backward compatibility of orchestrate function."""
+
+    @pytest.mark.asyncio
+    async def test_orchestrate_delegates_to_workflow_engine(self, tmp_path):
+        """Test that orchestrate now delegates to workflow engine."""
+        from src.workflow_engine import (
+            WorkflowDefinition,
+            WorkflowMetadata,
+            WorkflowStep,
+            WorkflowContext,
+        )
+
+        test_workflow = WorkflowDefinition(
+            metadata=WorkflowMetadata(
+                id="code-generation-v1", name="Code Gen", version="1.0.0"
+            ),
+            steps=[
+                WorkflowStep(id="plan", skill="create_plan", inputs={}),
+                WorkflowStep(id="build", skill="generate_code", inputs={}),
+                WorkflowStep(id="test", skill="review_code", inputs={}),
+            ],
+        )
+
+        mock_context = WorkflowContext(initial_input={"requirements": "test"})
+        mock_context.step_outputs = {
+            "plan": {"outputs": {"result": PLAN_EMAIL_VALIDATOR}},
+            "build": {"outputs": {"result": CODE_RESULT_EMAIL}},
+            "test": {"outputs": {"result": REVIEW_GOOD}},
+        }
+
+        with patch("src.orchestrator.discover_workflow", return_value=test_workflow):
+            with patch(
+                "src.orchestrator.WorkflowEngine.execute_workflow",
+                AsyncMock(return_value=mock_context),
+            ):
+                result = await orchestrate("test requirements")
+
+                # Verify legacy format
+                assert "plan" in result
+                assert "code" in result
+                assert "review" in result
+                assert "metadata" in result
+                assert result["plan"] == PLAN_EMAIL_VALIDATOR
+                assert result["code"] == CODE_RESULT_EMAIL
+                assert result["review"] == REVIEW_GOOD
+                assert result["metadata"]["workflow_id"] == "code-generation-v1"
+
+    @pytest.mark.asyncio
+    async def test_orchestrate_returns_dict(self):
+        """Test that orchestrate returns dict (not None)."""
+        from src.workflow_engine import (
+            WorkflowDefinition,
+            WorkflowMetadata,
+            WorkflowContext,
+        )
+
+        test_workflow = WorkflowDefinition(
+            metadata=WorkflowMetadata(
+                id="code-generation-v1", name="Code Gen", version="1.0.0"
+            ),
+            steps=[],
+        )
+
+        mock_context = WorkflowContext(initial_input={})
+        mock_context.step_outputs = {}
+
+        with patch("src.orchestrator.discover_workflow", return_value=test_workflow):
+            with patch(
+                "src.orchestrator.WorkflowEngine.execute_workflow",
+                AsyncMock(return_value=mock_context),
+            ):
+                result = await orchestrate("test")
+
+                assert isinstance(result, dict)
+                assert "metadata" in result

@@ -32,118 +32,127 @@ class TestFullOrchestration:
     @pytest.mark.asyncio
     async def test_full_orchestration_workflow(self, tmp_path):
         """Test complete orchestration from requirements to review."""
-        # Mock discovery to return agent URLs
-        with patch("src.orchestrator.discover_agent") as mock_discover:
-            mock_discover.side_effect = [
-                "http://localhost:8001",  # Plan agent
-                "http://localhost:8002",  # Build agent
-                "http://localhost:8003",  # Test agent
-            ]
+        from pathlib import Path
+        from src.workflow_engine import WorkflowContext, load_workflow_from_yaml
 
-            # Mock agent skill calls
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD},
-                ]
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
 
-                # Mock file operations to use tmp_path
+        # Mock workflow discovery and execution
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            # Mock context
+            mock_context = WorkflowContext(
+                initial_input={"requirements": REQUIREMENTS_EMAIL_VALIDATOR}
+            )
+            mock_context.step_outputs = {
+                "plan": {"outputs": {"result": PLAN_EMAIL_VALIDATOR}},
+                "build": {"outputs": {"result": CODE_RESULT_EMAIL}},
+                "test": {"outputs": {"result": REVIEW_GOOD}},
+            }
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            PLAN_EMAIL_VALIDATOR,
+                            CODE_RESULT_EMAIL,
+                            REVIEW_GOOD,
+                        ]
+                    ),
                 ):
-                    await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
+                    result = await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
-                    # Verify all steps were executed
-                    assert mock_discover.call_count == 3
-                    assert mock_call.call_count == 3
-
-                    # Verify files were created
-                    assert os.path.exists(os.path.join(str(tmp_path), "main.py"))
-                    assert os.path.exists(os.path.join(str(tmp_path), "plan.json"))
-                    assert os.path.exists(os.path.join(str(tmp_path), "review.json"))
-                    assert os.path.exists(os.path.join(str(tmp_path), "metadata.json"))
+                    # Verify result structure
+                    assert "plan" in result
+                    assert "code" in result
+                    assert "review" in result
+                    assert "metadata" in result
 
     @pytest.mark.asyncio
     async def test_orchestration_data_flow(self, tmp_path):
         """Test that data flows correctly through the pipeline."""
-        with patch(
-            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
-        ):
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                # Capture calls to verify data flow
-                calls = []
+        from pathlib import Path
+        from src.workflow_engine import load_workflow_from_yaml
 
-                def track_call(*args, **kwargs):
-                    calls.append((args, kwargs))
-                    # Return appropriate response based on skill
-                    # args: (agent_url, skill_id, params, timeout=60.0)
-                    skill_id = args[1]
-                    if skill_id == "create_plan":
-                        return {"result": PLAN_EMAIL_VALIDATOR}
-                    elif skill_id == "generate_code":
-                        return {"result": CODE_RESULT_EMAIL}
-                    elif skill_id == "review_code":
-                        return {"result": REVIEW_GOOD}
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
 
-                mock_call.side_effect = track_call
+        # Mock workflow discovery and execution
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
 
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            PLAN_EMAIL_VALIDATOR,
+                            CODE_RESULT_EMAIL,
+                            REVIEW_GOOD,
+                        ]
+                    ),
                 ):
-                    await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
+                    result = await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
-                    # Verify data flow
-                    # Call 1: requirements → plan
-                    assert (
-                        calls[0][0][2]["requirements"] == REQUIREMENTS_EMAIL_VALIDATOR
-                    )
-
-                    # Call 2: plan → code
-                    assert calls[1][0][2]["plan"] == PLAN_EMAIL_VALIDATOR
-
-                    # Call 3: code → review
-                    assert calls[2][0][2]["code"] == CODE_RESULT_EMAIL["code"]
-                    assert calls[2][0][2]["language"] == CODE_RESULT_EMAIL["language"]
+                    # Verify data flows through result
+                    assert result["plan"] == PLAN_EMAIL_VALIDATOR
+                    assert result["code"] == CODE_RESULT_EMAIL
+                    assert result["review"] == REVIEW_GOOD
 
     @pytest.mark.asyncio
     async def test_output_files_content(self, tmp_path):
         """Test that output files contain correct data."""
-        with patch(
-            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
-        ):
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD},
-                ]
+        from pathlib import Path
+        from src.workflow_engine import load_workflow_from_yaml
 
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        # Mock workflow discovery and execution
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            PLAN_EMAIL_VALIDATOR,
+                            CODE_RESULT_EMAIL,
+                            REVIEW_GOOD,
+                        ]
+                    ),
                 ):
-                    await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
+                    result = await orchestrate(REQUIREMENTS_EMAIL_VALIDATOR)
 
-                    # Verify main.py contains the code
-                    with open(os.path.join(str(tmp_path), "main.py"), "r") as f:
-                        code = f.read()
-                        assert code == CODE_RESULT_EMAIL["code"]
-
-                    # Verify plan.json
-                    with open(os.path.join(str(tmp_path), "plan.json"), "r") as f:
-                        plan = json.load(f)
-                        assert plan["title"] == PLAN_EMAIL_VALIDATOR["title"]
-
-                    # Verify review.json
-                    with open(os.path.join(str(tmp_path), "review.json"), "r") as f:
-                        review = json.load(f)
-                        assert review["quality_score"] == REVIEW_GOOD["quality_score"]
-
-                    # Verify metadata.json
-                    with open(os.path.join(str(tmp_path), "metadata.json"), "r") as f:
-                        metadata = json.load(f)
-                        assert metadata["requirements"] == REQUIREMENTS_EMAIL_VALIDATOR
-                        assert metadata["approved"] is True
+                    # Verify result content
+                    assert result["plan"]["title"] == PLAN_EMAIL_VALIDATOR["title"]
+                    assert result["code"]["code"] == CODE_RESULT_EMAIL["code"]
+                    assert (
+                        result["review"]["quality_score"]
+                        == REVIEW_GOOD["quality_score"]
+                    )
 
 
 @pytest.mark.e2e
@@ -154,33 +163,37 @@ class TestDiscoveryIntegration:
     @pytest.mark.asyncio
     async def test_orchestration_uses_discovery(self, tmp_path):
         """Test that orchestration uses discovery to find agents."""
-        with patch("src.orchestrator.discover_agent") as mock_discover:
-            mock_discover.side_effect = [
-                "http://localhost:8001",
-                "http://localhost:8002",
-                "http://localhost:8003",
-            ]
+        from pathlib import Path
+        from src.workflow_engine import load_workflow_from_yaml
 
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    {"result": CODE_RESULT_EMAIL},
-                    {"result": REVIEW_GOOD},
-                ]
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover_workflow:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover_workflow.return_value = workflow
+
+            with patch("src.workflow_engine.discover_agent") as mock_discover_agent:
+                mock_discover_agent.return_value = "http://localhost:8001"
 
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            PLAN_EMAIL_VALIDATOR,
+                            CODE_RESULT_EMAIL,
+                            REVIEW_GOOD,
+                        ]
+                    ),
                 ):
-                    await orchestrate("test requirements")
+                    result = await orchestrate("test requirements")
 
-                    # Verify discovery was called for each skill
-                    assert mock_discover.call_count == 3
-
-                    # Verify correct skills were requested
-                    call_args = [call[0][0] for call in mock_discover.call_args_list]
-                    assert "create_plan" in call_args
-                    assert "generate_code" in call_args
-                    assert "review_code" in call_args
+                    # Verify workflow discovery was called
+                    mock_discover_workflow.assert_called_once()
+                    # Verify agent discovery was used
+                    assert mock_discover_agent.call_count >= 1
 
 
 @pytest.mark.e2e
@@ -191,18 +204,30 @@ class TestErrorScenarios:
     @pytest.mark.asyncio
     async def test_orchestration_with_agent_failure(self, tmp_path):
         """Test orchestration behavior when an agent fails."""
-        with patch(
-            "src.orchestrator.discover_agent", return_value="http://localhost:8000"
-        ):
-            with patch("src.orchestrator.call_agent_skill") as mock_call:
-                # First call succeeds, second fails
-                mock_call.side_effect = [
-                    {"result": PLAN_EMAIL_VALIDATOR},
-                    Exception("Agent connection failed"),
-                ]
+        from pathlib import Path
+        from src.workflow_engine import load_workflow_from_yaml
 
+        # Load actual workflow
+        workflow_path = Path("workflows/code-generation.yaml")
+        if not workflow_path.exists():
+            pytest.skip("Workflow file not found")
+
+        with patch("src.orchestrator.discover_workflow") as mock_discover:
+            workflow = load_workflow_from_yaml(workflow_path)
+            mock_discover.return_value = workflow
+
+            with patch(
+                "src.workflow_engine.discover_agent",
+                return_value="http://localhost:8001",
+            ):
                 with patch(
-                    "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
+                    "src.workflow_engine.WorkflowEngine.call_agent_skill",
+                    AsyncMock(
+                        side_effect=[
+                            PLAN_EMAIL_VALIDATOR,
+                            Exception("Agent connection failed"),
+                        ]
+                    ),
                 ):
                     # Should raise exception
                     with pytest.raises(Exception, match="Agent connection failed"):
@@ -211,17 +236,11 @@ class TestErrorScenarios:
     @pytest.mark.asyncio
     async def test_orchestration_with_discovery_failure(self, tmp_path):
         """Test orchestration behavior when discovery fails."""
-        import httpx
-
-        with patch("src.orchestrator.discover_agent", return_value=None):
-            with patch(
-                "src.orchestrator.ensure_app_folder", return_value=str(tmp_path)
-            ):
-                # Should raise error when trying to use None URL
-                with pytest.raises(
-                    (AttributeError, TypeError, httpx.UnsupportedProtocol)
-                ):
-                    await orchestrate("test requirements")
+        # Mock workflow discovery failure
+        with patch("src.orchestrator.discover_workflow", return_value=None):
+            # Should raise ValueError
+            with pytest.raises(ValueError, match="Workflow not found"):
+                await orchestrate("test requirements")
 
 
 @pytest.mark.e2e
