@@ -1,339 +1,153 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working with the Pallet A2A Agent Framework repository.
+
+## Quick Start
+
+**Setup:**
+```bash
+uv sync && uv sync --extra test
+npm install -g @anthropic-ai/claude-cli
+export ANTHROPIC_API_KEY="your-api-key-here"
+bash scripts/bootstrap.sh
+```
+
+**Run orchestrator:**
+```bash
+uv run python main.py "your requirements"  # Custom
+uv run python main.py                      # Default
+```
+
+**Tear down:**
+```bash
+bash scripts/kill.sh --clean-logs  # Stop services, clean logs
+docker rmi registry:2              # Remove Docker image (optional)
+```
+
+Output saved to `app/`: code, plan, review, metadata
 
 ## Project Overview
 
-Pallet is a framework for building and orchestrating AI agents using Google's A2A (Agent-to-Agent) protocol. Phase 2 implements three minimal agents (Plan, Build, Test) that communicate via FastAPI and JSON-RPC 2.0. Each agent invokes Claude API via subprocess using the Claude CLI tool.
+Pallet orchestrates AI agents using Google's A2A (Agent-to-Agent) protocol. Three agents form a pipeline:
+- **Plan Agent** (8001) - `create_plan` skill: requirements → structured plan
+- **Build Agent** (8002) - `generate_code` skill: plan → code
+- **Test Agent** (8003) - `review_code` skill: code → quality review
 
-## Common Development Commands
+**Stack**: FastAPI, JSON-RPC 2.0, OCI Registry (ORAS), Claude CLI subprocess
 
-### Setup
-```bash
-# Install Python dependencies using uv
-uv sync
+## Architecture
 
-# Install Claude CLI (required for agents to invoke Claude API)
-npm install -g @anthropic-ai/claude-cli
-
-# Set API key environment variable
-export ANTHROPIC_API_KEY="your-api-key-here"
-```
-
-### Bootstrap the System (Recommended)
-
-Use the automated bootstrap script to set up everything:
-
-```bash
-bash scripts/bootstrap.sh
-```
-
-This handles all setup automatically:
-- ✅ Checks dependencies (Docker, ORAS, uv, jq)
-- ✅ Starts OCI registry (port 5000)
-- ✅ Pushes agent cards to registry
-- ✅ Starts Plan Agent (port 8001)
-- ✅ Starts Build Agent (port 8002)
-- ✅ Starts Test Agent (port 8003)
-- ✅ Verifies all services running
-- ✅ Prints ready-to-use commands
-
-### Testing the Full Pipeline
-
-After bootstrap completes, run the orchestrator in a new terminal:
-
-```bash
-# With default requirements:
-uv run python main.py
-
-# With custom requirements:
-uv run python main.py "Create a function that validates email addresses"
-```
-
-Results are automatically saved to:
-- `app/main.py` - Generated code
-- `app/plan.json` - Implementation plan
-- `app/review.json` - Code review
-- `app/metadata.json` - Pipeline metadata
-
-### Tear Down the System
-
-To stop all services and clean up:
-
-```bash
-bash scripts/kill.sh              # Stop services, keep logs
-bash scripts/kill.sh --clean-logs # Stop services and remove logs
-```
-
-**What it does:**
-- Stops all agents (plan, build, test)
-- Stops and removes the registry **container** (keeps Docker image for fast re-bootstrap)
-- Clears the `app/` output folder
-- Optionally clears logs (`--clean-logs` flag)
-
-**To remove the Docker image completely:**
-```bash
-docker rmi registry:2
-```
-
-### Manual Agent Control (Advanced)
-
-For manual testing, you can run agents individually in separate terminals:
-
-```bash
-# Terminal 1: Plan Agent (port 8001)
-uv run python -m src.agents.plan_agent
-
-# Terminal 2: Build Agent (port 8002)
-uv run python -m src.agents.build_agent
-
-# Terminal 3: Test Agent (port 8003)
-uv run python -m src.agents.test_agent
-```
-
-But this requires manual registry setup. Use `bash scripts/bootstrap.sh` for easier setup.
-
-### Environment Setup
-```bash
-# Install Claude CLI (if not already installed)
-npm install -g @anthropic-ai/claude-cli
-
-# Required for Claude API access (used by claude CLI)
-export ANTHROPIC_API_KEY="your-api-key-here"
-```
-
-## Architecture Overview
-
-### Core Concept
-The project implements Google's A2A protocol using FastAPI. Three agents form a pipeline:
-1. **Plan Agent** (port 8001) - Converts requirements to structured plans
-2. **Build Agent** (port 8002) - Generates code from plans
-3. **Test Agent** (port 8003) - Reviews code for quality
-
-Each agent inherits from `BaseAgent` and implements a single skill.
-
-### Communication Flow
+### Communication
 - **Protocol**: JSON-RPC 2.0 over HTTP
-- **Discovery**: Agents expose `/agent-card` endpoint describing capabilities
-- **Execution**: Clients POST to `/execute` endpoint with JSON-RPC messages
-- **Response Format**:
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "result": {...},
-    "id": "message-id"
-  }
-  ```
+- **Discovery**: Registry-based via agent `/agent-card` endpoint
+- **Execution**: POST to `/execute` with `{"jsonrpc": "2.0", "method": "...", "params": {...}, "id": "..."}`
 
-### Key Files & Responsibilities
+### Core Components
 
-#### `src/agents/base.py` - Shared Foundation
-- **BaseAgent** class that all agents inherit from
-- Provides FastAPI app setup and A2A endpoint handling (`/agent-card`, `/execute`)
-- `execute_skill()` - Abstract method implemented by each agent
-- `call_claude()` - Calls Claude via CLI subprocess (requires `claude` CLI installed)
-- `call_agent_skill()` - Makes HTTP requests to other agents
-- **Important**: The `call_claude()` method uses subprocess to invoke the `claude` CLI with `-p --dangerously-skip-permissions` flags. This expects the Claude CLI to be in PATH.
+| Component | Role |
+|-----------|------|
+| `src/agents/base.py` | **BaseAgent** - FastAPI setup, A2A endpoints (`/agent-card`, `/execute`), Claude CLI wrapper |
+| `main.py` | CLI entry point → delegates to `src/orchestrator.py` |
+| `src/orchestrator.py` | Chains agents: Plan → Build → Test, dynamic discovery, saves results |
+| `src/discovery.py` | Registry queries, agent card pulls, skill-based lookup |
 
-#### Agent Implementation Pattern
-Each agent (plan, build, test) follows this structure:
+### Agent Pattern
+
+Each agent (plan, build, test) inherits from `BaseAgent`:
 ```python
-class AgentName(BaseAgent):
-    def __init__(self):
-        skills = [SkillDefinition(...)]  # Define capabilities
-        super().__init__(name="...", port=PORT, skills=skills)
-
-    async def execute_skill(self, skill_id, params):
-        # Validate parameters
-        # Call self.call_claude() with system_prompt and user_message
-        # Parse JSON response (handles markdown code blocks)
-        # Return structured result
+async def execute_skill(self, skill_id, params):
+    # 1. Validate params
+    # 2. self.call_claude(system_prompt, user_msg) → JSON response
+    # 3. Parse JSON (handles markdown wrapping)
+    # 4. Return result
 ```
 
-### Agent Details
+**Key methods**:
+- `call_claude()` - Subprocess to `claude` CLI with `-p --dangerously-skip-permissions`
+- `call_agent_skill()` - HTTP POST to other agents
+- `parse_json_response()` - Fallback: `\`\`\`json` → `\`\`\`` → raw
 
-#### Plan Agent (`src/agents/plan_agent.py`)
-- **Skill**: `create_plan`
-- **Input**: `{"requirements": string}`
-- **Output**: JSON with title, steps, dependencies, estimated_total_time
-- **Process**: Sends requirements to Claude with planning system prompt, expects JSON response
+### Agent Skills
 
-#### Build Agent (`src/agents/build_agent.py`)
-- **Skill**: `generate_code`
-- **Input**: `{"plan": object}`
-- **Output**: JSON with code, explanation, language, functions array
-- **Process**: Converts plan to JSON string, sends to Claude for code generation
+| Agent | Skill | Input | Output |
+|-------|-------|-------|--------|
+| Plan (8001) | `create_plan` | `requirements: str` | `{title, steps, deps, time}` |
+| Build (8002) | `generate_code` | `plan: object` | `{code, explanation, language, functions}` |
+| Test (8003) | `review_code` | `code: str, language: str` | `{quality_score, issues, suggestions, approved, summary}` |
 
-#### Test Agent (`src/agents/test_agent.py`)
-- **Skill**: `review_code`
-- **Input**: `{"code": string, "language": string}`
-- **Output**: JSON with quality_score (1-10), issues, suggestions, approved (boolean), summary
-- **Process**: Sends code to Claude with review prompt
+## Implementation Details
 
-### Orchestrator Architecture
+### JSON Response Parsing
+Agents robustly parse Claude responses:
+1. Extract from `\`\`\`json...` code blocks
+2. Fallback to `\`\`\`...` blocks
+3. Parse raw response if no blocks found
+4. Return structured error on failure
 
-**Entry Point** (`main.py`):
-- Thin wrapper that parses CLI arguments
-- Delegates to core orchestration logic in `src/orchestrator.py`
-- Usage: `uv run python main.py [requirements]`
+### Ports
+- Plan: 8001, Build: 8002, Test: 8003
+- Configurable per agent `__init__`, hardcoded in orchestrator as `localhost:PORT`
 
-**Core Logic** (`src/orchestrator.py`):
-- Chains the three agents sequentially: Plan → Build → Test
-- Uses dynamic discovery to find agents by skill ID
-- Makes A2A calls via HTTP with JSON-RPC 2.0
-- Saves results to `app/` folder (code, plan, review, metadata)
-- Default requirements if none provided; accepts custom requirements
-- Formats and displays results from each agent
+### Skill Schema
+Each SkillDefinition exposes via `/agent-card`:
+- `id` - Unique identifier
+- `description` - Human description
+- `input_schema` - JSON Schema for params
+- `output_schema` - JSON Schema for result
 
-## Important Implementation Details
-
-### JSON Parsing Robustness
-All agents include fallback JSON parsing that:
-1. Checks for `\`\`\`json` code blocks and extracts content
-2. Falls back to `\`\`\`` code blocks
-3. Treats raw response as JSON if no code blocks
-4. Returns structured error response on JSON parse failure
-
-This handles cases where Claude wraps JSON in markdown.
-
-### Claude CLI Integration
-The `BaseAgent.call_claude()` method:
-- Uses subprocess to call the `claude` CLI tool
-- Combines system_prompt and user_message into one prompt
-- Requires `claude` to be installed and in PATH
-- Uses async subprocess for non-blocking execution
-- Raises RuntimeError if CLI not found or subprocess fails
-
-### Port Assignment
-- Plan Agent: 8001
-- Build Agent: 8002
-- Test Agent: 8003
-- Hardcoded in orchestrator as `localhost:PORT`
-- Can be changed in individual agent `__init__` if needed
-
-## Skill Schema Structure
-
-Each SkillDefinition includes:
-- `id` - Unique skill identifier
-- `description` - Human-readable description
-- `input_schema` - JSON Schema describing expected parameters
-- `output_schema` - JSON Schema describing returned data
-
-These are exposed in the `/agent-card` response for agent discovery.
-
-## File Organization
+## Project Structure
 
 ```
-src/
-├── agents/
-│   ├── base.py              # BaseAgent class & A2A protocol
-│   ├── plan_agent.py        # Plan Agent (create_plan skill)
-│   ├── build_agent.py       # Build Agent (generate_code skill)
-│   └── test_agent.py        # Test Agent (review_code skill)
-├── agent_cards/
-│   ├── plan_agent_card.json      # Plan agent skill definitions
-│   ├── build_agent_card.json     # Build agent skill definitions
-│   └── test_agent_card.json      # Test agent skill definitions
-├── orchestrator.py          # Core orchestration logic (Phase 5)
-└── discovery.py             # Registry discovery module
-
-specs/
-├── phase2.md         # Three Minimal Agents specification
-├── phase3.md         # Registry Operations specification
-├── phase4.md         # Discovery specification
-└── phase5.md         # Orchestration specification
-
-main.py              # Entry point (thin wrapper)
-pyproject.toml       # Dependencies & project config
-README.md            # User-facing documentation
-app/                 # Generated code output folder
+src/agents/          Plan/Build/Test agents, BaseAgent class
+src/agent_cards/     Skill definitions (JSON)
+src/orchestrator.py  Plan → Build → Test pipeline
+src/discovery.py     Registry queries, agent lookup
+main.py              CLI entry point
+pyproject.toml       Dependencies
+tests/               Unit, integration, API tests
+specs/               Phase 2-5 specifications
+app/                 Generated outputs (code, plan, review, metadata)
 ```
 
-## Testing Tips
+## Testing & Debugging
 
-### Running Tests and Linting with Invoke (Recommended)
+### Invoke Tasks (see [tests/README.md](tests/README.md#invoke-tasks-reference) for full docs)
 
-The project uses Invoke for convenient test and linting task management. First, discover available tasks:
-
+**Linting:**
 ```bash
-# Install test dependencies (includes invoke)
-uv sync --extra test
-
-# List all available tasks
-uv run invoke --list
-
-# Code Quality & Linting
-uv run invoke lint.black             # Format code with black
-uv run invoke lint.black-check       # Check if code needs formatting
-uv run invoke lint.flake8            # Run flake8 style checker
-
-# Run all tests (default)
-uv run invoke test
-
-# Run specific test categories
-uv run invoke test.unit              # Unit tests only
-uv run invoke test.integration       # Integration tests only
-uv run invoke test.api               # API endpoint tests only
-
-# Generate coverage reports
-uv run invoke test.coverage-html     # Generate HTML report (htmlcov/index.html)
-uv run invoke test.coverage-term     # Show coverage in terminal
-uv run invoke test.coverage          # All three formats (HTML, terminal, XML)
-
-# Debugging tests
-uv run invoke test.debug             # Drop into pdb on failure
-uv run invoke test.verbose           # Verbose output
+uv run invoke lint.black        # Format
+uv run invoke lint.black-check  # Check
+uv run invoke lint.flake8       # Style
 ```
 
-For complete invoke task documentation, see [tests/README.md](tests/README.md#invoke-tasks-reference).
-
-### Quick Setup & Testing Loop (Full Pipeline)
-
+**Testing:**
 ```bash
-# Bootstrap everything (5-10 seconds)
-bash scripts/bootstrap.sh
-
-# Test multiple runs with different requirements
-uv run python main.py "Create a function that validates email addresses"
-uv run python main.py "Build a TODO list manager"
-uv run python main.py "Create a Fibonacci calculator"
-
-# Check results in app/ folder
-ls -la app/
-cat app/review.json | jq '.quality_score, .approved, .summary'
-
-# Tear down when done
-bash scripts/kill.sh --clean-logs
+uv run invoke test              # All (excludes slow/e2e)
+uv run invoke test.unit         # Unit only
+uv run invoke test.integration  # Integration only
+uv run invoke test.api          # API only
+uv run invoke test.debug        # Drop to pdb on failure
+uv run invoke test.verbose      # Verbose output
+uv run invoke test.coverage     # All coverage formats
 ```
 
-### Individual Tests
+### Debugging Approaches
 
-- **Single agent test**: Run one agent manually (`uv run python -m src.agents.plan_agent`) and POST JSON-RPC messages to `localhost:PORT/execute`
-- **Full pipeline**: Use `main.py` with various requirements to test end-to-end
-- **Registry discovery**: Verify agent cards are in registry:
-  ```bash
-  oras pull localhost:5000/agents/plan:v1 -o /tmp/plan
-  cat /tmp/plan/plan_agent_card.json | jq '.skills[].id'
-  ```
-- **Debug Claude calls**: Add logging to `src/agents/base.py::call_claude()` to see raw prompts
-- **Agent availability**: GET `localhost:PORT/agent-card` to verify skill definitions:
-  ```bash
-  curl http://localhost:8001/agent-card | jq '.skills'
-  ```
-- **Check results**: Look in `app/` folder after orchestration:
-  - `app/main.py` - Generated code (execute with `python app/main.py`)
-  - `app/metadata.json` - Pipeline run metadata
-  - `app/review.json` - Detailed code review with scores
+| Task | Command |
+|------|---------|
+| Manual agent test | `uv run python -m src.agents.plan_agent` + POST JSON-RPC to `localhost:8001/execute` |
+| End-to-end test | `uv run python main.py "your requirement"` |
+| Check agent card | `curl http://localhost:8001/agent-card \| jq '.skills'` |
+| Verify registry | `oras pull localhost:5000/agents/plan:v1 -o /tmp/plan && cat /tmp/plan/plan_agent_card.json` |
+| Debug Claude calls | Add logging to `src/agents/base.py::call_claude()` |
+| View outputs | `ls -la app/` then check `main.py`, `plan.json`, `review.json`, `metadata.json` |
 
 ### Troubleshooting
 
-- **Bootstrap fails**: Check logs with `tail -f logs/*.log`
-- **Agent not starting**: Ensure port (8001-8003) isn't in use: `lsof -i :8001`
-- **Registry issues**: Verify with `docker ps | grep registry`
-- **Clean restart**: Run `bash scripts/kill.sh --clean-logs` before bootstrap
-- **Complete clean** (remove Docker image too):
-  ```bash
-  bash scripts/kill.sh --clean-logs
-  docker rmi registry:2
-  bash scripts/bootstrap.sh  # Next bootstrap will pull fresh image
-  ```
+| Issue | Fix |
+|-------|-----|
+| Bootstrap fails | `tail -f logs/*.log` |
+| Port in use | `lsof -i :8001` and free ports 8001-8003 |
+| Registry down | `docker ps \| grep registry` |
+| Stale state | `bash scripts/kill.sh --clean-logs` before bootstrap |
+| Remove Docker image | `docker rmi registry:2` |
