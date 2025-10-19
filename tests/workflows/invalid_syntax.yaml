@@ -1,0 +1,8 @@
+metadata:
+  id: test-invalid
+  name: Invalid YAML
+  version: 1.0.0
+steps:
+  - id: step1
+    skill: test_skill
+    inputs: [invalid yaml structure here

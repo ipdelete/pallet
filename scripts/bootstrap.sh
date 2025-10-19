@@ -211,6 +211,26 @@ publish_agent_cards() {
 }
 
 #######################################################################
+# Step 3.5: Push Workflows to Registry
+#######################################################################
+
+push_workflows() {
+    log_info "Pushing workflows to registry..."
+
+    cd "$PALLET_ROOT"
+
+    # Check if workflows directory exists and has workflow files
+    if [ -d "workflows" ] && [ -n "$(ls -A workflows/*.yaml 2>/dev/null || ls -A workflows/*.yml 2>/dev/null)" ]; then
+        bash scripts/push_workflows.sh
+        log_success "Workflows pushed to registry"
+    else
+        log_warning "No workflows directory or workflow files found, skipping"
+    fi
+
+    echo ""
+}
+
+#######################################################################
 # Step 4: Start Agents
 #######################################################################
 
@@ -307,7 +327,7 @@ System Status:
   Test Agent:   localhost:8003
 
 Running Services:
-  - OCI Registry (storing agent cards)
+  - OCI Registry (storing agent cards and workflows)
   - Plan Agent (creates structured plans)
   - Build Agent (generates code from plans)
   - Test Agent (reviews generated code)
@@ -392,6 +412,7 @@ EOF
     check_dependencies
     start_registry
     publish_agent_cards
+    push_workflows
     start_agents
     verify_setup
     print_instructions

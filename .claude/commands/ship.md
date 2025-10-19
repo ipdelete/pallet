@@ -1,5 +1,6 @@
 ---
 description: Complete pre-flight checks and ship code changes (lint, test, secrets check, commit, push)
+model: claude-haiku-4-5
 ---
 
 ## Ship Command: Pre-flight & Deploy Workflow

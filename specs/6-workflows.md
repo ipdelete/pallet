@@ -114,16 +114,21 @@ Bootstrap script to push sample workflows to registry:
 
 ### Phase 1: Foundation - Workflow Data Models and YAML Parsing
 
-Create the core data structures and YAML parsing logic:
+**Implementation**:
 - Define Pydantic models for workflows (WorkflowDefinition, WorkflowStep)
 - Implement YAML loading and validation
 - Create WorkflowContext for managing execution state
 - Implement template expression resolution logic (`{{ variable.path }}` syntax)
-- Add unit tests for data models and expression resolution
+
+**Testing** (TDD approach):
+- Add `tests/unit/test_workflow_models.py` - Test Pydantic model validation
+- Add `tests/unit/test_workflow_context.py` - Test context and template resolution
+- Run: `uv run invoke test.unit` - All new unit tests must pass
+- Coverage target: >90% for workflow models and context
 
 ### Phase 2: Core Implementation - Workflow Engine
 
-Build the workflow execution engine:
+**Implementation**:
 - Implement WorkflowEngine class with step execution methods
 - Add support for sequential execution (existing pattern)
 - Implement parallel execution with asyncio.gather
@@ -132,32 +137,62 @@ Build the workflow execution engine:
 - Add agent discovery integration per step
 - Include timeout and basic error handling per step
 
+**Testing**:
+- Add `tests/unit/test_workflow_engine.py` - Test engine with mocked agents
+- Test each execution pattern (sequential, parallel, conditional, switch)
+- Test timeout handling and error cases
+- Run: `uv run invoke test.unit` - All tests including existing must pass
+- Coverage target: >85% for workflow engine
+
 ### Phase 3: Registry Integration - Workflow Storage
 
-Extend registry functionality for workflows:
+**Implementation**:
 - Implement workflow_registry.py with push/pull functions
 - Extend discovery.py to query workflow catalog
 - Add workflow versioning support
 - Create scripts/push_workflows.sh bootstrap script
-- Test end-to-end workflow storage and retrieval
 
-### Phase 4: Example Workflows and Documentation
+**Testing**:
+- Add `tests/unit/test_workflow_registry.py` - Mock subprocess/ORAS calls
+- Update `tests/unit/test_discovery.py` - Add workflow discovery tests
+- Add fixtures in `tests/fixtures/conftest.py` for sample workflows
+- Run: `uv run invoke test.unit` - Verify no regressions
+- Coverage target: >80% for registry functions
 
-Create sample workflows and update documentation:
-- Implement code-generation.yaml (existing pipeline)
-- Create smart-router.yaml (dynamic routing)
-- Add parallel-analysis.yaml (parallel pattern example)
-- Create docs/WORKFLOW_ENGINE.md with specification and examples
-- Update README.md to reference workflow-based orchestration
+### Phase 4: Example Workflows and Integration Tests
 
-### Phase 5: Orchestrator Refactoring
+**Implementation**:
+- Create `workflows/code-generation.yaml` (existing pipeline)
+- Create `workflows/smart-router.yaml` (dynamic routing)
+- Create `workflows/parallel-analysis.yaml` (parallel pattern)
 
-Refactor existing orchestrator to use workflow engine:
-- Update main.py to accept workflow ID as parameter
+**Testing**:
+- Add `tests/integration/test_workflow_execution.py` - End-to-end workflow tests
+- Add `tests/workflows/` directory with test workflow files (valid/invalid)
+- Test workflow loading, parsing, execution with mocked agents
+- Test error scenarios (invalid YAML, missing skills, timeouts)
+- Run: `uv run invoke test.integration` - All integration tests pass
+- Run: `uv run invoke test` - All tests (unit + integration) pass
+- Coverage target: >85% overall
+
+### Phase 5: Orchestrator Refactoring and Full Validation
+
+**Implementation**:
+- Update main.py to accept workflow ID as CLI parameter
 - Modify orchestrator.py to load and execute workflows
-- Maintain backward compatibility with direct workflow specification
-- Add CLI arguments for workflow selection
-- Test with existing agents and workflows
+- Maintain backward compatibility with hardcoded orchestration
+- Create docs/WORKFLOW_ENGINE.md documentation
+- Update README.md with workflow information
+
+**Testing**:
+- Update `tests/unit/test_orchestrator.py` - Add workflow-based orchestration tests
+- Update `tests/integration/test_end_to_end.py` - Test new workflow path
+- Add backward compatibility tests (verify Phase 5 behavior unchanged)
+- Run: `uv run invoke test.coverage` - Generate full coverage report
+- Run: `uv run invoke lint.black-check` - Verify code formatting
+- Run: `uv run invoke lint.flake8` - Verify style compliance
+- **Final validation**: All 151+ existing tests MUST pass with zero regressions
+- Coverage target: Maintain or exceed 87% overall coverage
 
 ## Step by Step Tasks
 
@@ -175,7 +210,11 @@ Refactor existing orchestrator to use workflow engine:
   - `steps` (list of WorkflowStep)
   - `error_handling` (optional configuration)
 - Add Pydantic validation for required fields
-- Write unit tests for model validation
+- **Test**: Create `tests/unit/test_workflow_models.py`
+  - Test WorkflowStep validation (required fields, types)
+  - Test WorkflowDefinition validation
+  - Test enum values
+  - Run: `uv run pytest tests/unit/test_workflow_models.py -v`
 
 ### 3. Implement WorkflowContext (`src/workflow_engine.py` - Part 2)
 - Create `WorkflowContext` class to manage execution state
@@ -185,7 +224,13 @@ Refactor existing orchestrator to use workflow engine:
   - Support `{{ steps.step_id.outputs.field }}`
   - Support nested paths
 - Implement `resolve_inputs()` to resolve all templates in a dict
-- Add unit tests for expression resolution edge cases
+- **Test**: Create `tests/unit/test_workflow_context.py`
+  - Test context initialization with initial input
+  - Test `set_step_output()` and retrieval
+  - Test `resolve_expression()` with various patterns
+  - Test nested path resolution
+  - Test edge cases (missing keys, null values, invalid syntax)
+  - Run: `uv run pytest tests/unit/test_workflow_context.py -v`
 
 ### 4. Create WorkflowEngine Class (`src/workflow_engine.py` - Part 3)
 - Implement `load_workflow()` to parse YAML into WorkflowDefinition
@@ -197,7 +242,14 @@ Refactor existing orchestrator to use workflow engine:
   - Call agent via JSON-RPC
   - Return result
 - Add timeout handling per step
-- Write unit tests with mocked agents
+- **Test**: Create `tests/unit/test_workflow_engine.py`
+  - Test `load_workflow()` with valid/invalid YAML
+  - Test workflow validation errors
+  - Test `execute_step()` with mocked agent calls
+  - Test timeout handling
+  - Test agent discovery caching
+  - Add fixtures to `tests/fixtures/conftest.py` for sample workflows
+  - Run: `uv run pytest tests/unit/test_workflow_engine.py -v`
 
 ### 5. Implement Execution Patterns (`src/workflow_engine.py` - Part 4)
 - Implement `execute_sequential_steps()`:
@@ -216,7 +268,13 @@ Refactor existing orchestrator to use workflow engine:
   - Evaluate switch expression
   - Match against cases
   - Execute matched workflow or default
-- Add integration tests for each pattern
+- **Test**: Extend `tests/unit/test_workflow_engine.py`
+  - Test sequential execution with mocked steps
+  - Test parallel execution (verify concurrent calls)
+  - Test conditional execution (both branches)
+  - Test switch execution (multiple cases + default)
+  - Test error propagation in each pattern
+  - Run: `uv run invoke test.unit` to verify all unit tests pass
 
 ### 6. Create Main Execution Method (`src/workflow_engine.py` - Part 5)
 - Implement `execute_workflow()`:
@@ -227,7 +285,12 @@ Refactor existing orchestrator to use workflow engine:
   - Print progress during execution
   - Return final context with all step outputs
 - Add comprehensive error messages
-- Write end-to-end test with sample workflow
+- **Test**: Extend `tests/unit/test_workflow_engine.py`
+  - Test `execute_workflow()` end-to-end with mocked agents
+  - Test workflow with mixed step types
+  - Test error handling and recovery
+  - Test progress output
+  - Run: `uv run invoke test.unit` - Verify 100% of new code passes
 
 ### 7. Implement Workflow Registry Functions (`src/workflow_registry.py`)
 - Create `push_workflow_to_registry()`:
@@ -246,7 +309,14 @@ Refactor existing orchestrator to use workflow engine:
   - Pull workflow and parse metadata only
   - Don't load full workflow definition
   - Used for workflow discovery/listing
-- Add unit tests with mocked subprocess calls
+- **Test**: Create `tests/unit/test_workflow_registry.py`
+  - Test `push_workflow_to_registry()` with mocked subprocess
+  - Test `pull_workflow_from_registry()` with mocked ORAS
+  - Test `list_workflows()` with mocked HTTP response
+  - Test `get_workflow_metadata()` parsing
+  - Test error handling (registry down, invalid YAML)
+  - Add `mock_oras_workflow_pull` fixture to `tests/fixtures/conftest.py`
+  - Run: `uv run pytest tests/unit/test_workflow_registry.py -v`
 
 ### 8. Extend Discovery Module (`src/discovery.py`)
 - Add `discover_workflow()` function:
@@ -256,7 +326,12 @@ Refactor existing orchestrator to use workflow engine:
   - Return WorkflowDefinition object
 - Add caching for discovered workflows
 - Update module docstring to mention workflow discovery
-- Write integration tests with local registry
+- **Test**: Update `tests/unit/test_discovery.py`
+  - Add tests for `discover_workflow()` function
+  - Test workflow caching behavior
+  - Test integration with existing discovery functions
+  - Verify no regressions in existing discovery tests
+  - Run: `uv run pytest tests/unit/test_discovery.py -v`
 
 ### 9. Create Example Workflow: Code Generation (`workflows/code-generation.yaml`)
 - Define metadata (id: code-generation-v1, name, version, description)
@@ -267,7 +342,11 @@ Refactor existing orchestrator to use workflow engine:
 - Add template expressions for data flow
 - Set reasonable timeouts per step
 - Include error_handling configuration
-- Validate YAML syntax: `python -c "import yaml; yaml.safe_load(open('workflows/code-generation.yaml'))"`
+- **Test**: Create `tests/workflows/` directory with test workflows
+  - Copy code-generation.yaml to `tests/workflows/valid_code_generation.yaml`
+  - Create `tests/workflows/invalid_syntax.yaml` (malformed YAML)
+  - Create `tests/workflows/missing_required.yaml` (missing required fields)
+  - Validate YAML syntax: `python -c "import yaml; yaml.safe_load(open('workflows/code-generation.yaml'))"`
 
 ### 10. Create Example Workflow: Smart Router (`workflows/smart-router.yaml`)
 - Define metadata for routing workflow
@@ -318,6 +397,12 @@ Refactor existing orchestrator to use workflow engine:
 - Add workflow_id parameter (optional)
 - Update function to use workflow engine when workflow_id provided
 - Add deprecation notice for hardcoded orchestration
+- **Test**: Update `tests/unit/test_orchestrator.py`
+  - Add tests for `execute_workflow_by_id()`
+  - Test workflow loading and execution
+  - Test backward compatibility - existing `orchestrate()` still works
+  - Verify no regressions in existing orchestrator tests
+  - Run: `uv run pytest tests/unit/test_orchestrator.py -v`
 
 ### 15. Update Main Entry Point (`main.py`)
 - Add CLI argument for workflow ID: `--workflow` or `-w`
@@ -326,7 +411,13 @@ Refactor existing orchestrator to use workflow engine:
 - Execute workflow with WorkflowEngine
 - Print results
 - Update help text with workflow examples
-- Test: `uv run python main.py --workflow code-generation-v1 "Create hello world"`
+- **Test**: Update `tests/integration/test_end_to_end.py`
+  - Add test for workflow-based execution path
+  - Test CLI argument parsing for --workflow flag
+  - Test default workflow behavior
+  - Verify backward compatibility (no --workflow flag)
+  - Test: `uv run python main.py --workflow code-generation-v1 "Create hello world"`
+  - Run: `uv run pytest tests/integration/test_end_to_end.py -v`
 
 ### 16. Create Workflow Engine Documentation (`docs/WORKFLOW_ENGINE.md`)
 - Overview of workflow-based orchestration
@@ -349,22 +440,26 @@ Refactor existing orchestrator to use workflow engine:
 - Link to new WORKFLOW_ENGINE.md documentation
 - Update quick start to mention workflows
 
-### 18. Add Integration Tests
-- Create `tests/test_workflow_engine.py`:
-  - Test workflow loading from YAML
-  - Test sequential execution
-  - Test parallel execution
-  - Test conditional execution
-  - Test template resolution
-  - Test error handling
-- Create `tests/test_workflow_registry.py`:
-  - Test push/pull workflows
-  - Test list workflows
-  - Mock registry responses
-- Create `tests/test_workflows/`:
-  - Sample workflow files for testing
-  - Valid and invalid YAML examples
-- Run tests: `uv run pytest tests/`
+### 18. Add Integration Tests and Validate All Tests Pass
+- Create `tests/integration/test_workflow_execution.py`:
+  - Test full workflow execution with mocked agents
+  - Test workflow discovery and loading from registry
+  - Test data flow between steps in real scenarios
+  - Test error scenarios (timeout, missing skill, invalid input)
+  - Test parallel execution performance
+  - Test conditional routing with different inputs
+- Add workflow fixtures to `tests/fixtures/conftest.py`:
+  - `sample_workflow_definition` fixture
+  - `sample_workflow_yaml` fixture
+  - `mock_workflow_registry` fixture
+- **Validation Commands**:
+  - Run: `uv run invoke test.unit` - All unit tests pass
+  - Run: `uv run invoke test.integration` - All integration tests pass
+  - Run: `uv run invoke test` - All tests pass (unit + integration)
+  - Run: `uv run invoke test.coverage` - Generate coverage report
+  - Verify: Coverage ≥87% (maintain existing coverage)
+  - Run: `uv run invoke lint.black-check` - Code is formatted
+  - Run: `uv run invoke lint.flake8` - No style violations
 
 ### 19. Test End-to-End with Existing Agents
 - Start all services: `bash scripts/bootstrap.sh`
@@ -374,11 +469,32 @@ Refactor existing orchestrator to use workflow engine:
 - Check workflow outputs are correct
 - Test with different workflows
 
-### 20. Run Validation Commands
+### 20. Final Test Suite Validation and Quality Gates
+- **Quality Gate 1: All Tests Pass**
+  - Run: `uv run invoke test` - Must pass 100% of tests
+  - Run: `uv run invoke test.verbose` - Review any warnings
+  - Verify: All 151+ existing tests still pass (zero regressions)
+  - Verify: All new workflow tests pass
+- **Quality Gate 2: Code Coverage**
+  - Run: `uv run invoke test.coverage-term` - Review coverage
+  - Run: `uv run invoke test.coverage-html` - Generate HTML report
+  - Verify: Overall coverage ≥87% (maintain or exceed existing)
+  - Verify: New workflow code has ≥85% coverage
+- **Quality Gate 3: Code Quality**
+  - Run: `uv run invoke lint.black-check` - No formatting issues
+  - Run: `uv run invoke lint.flake8` - No style violations
+  - Fix any issues found
+- **Quality Gate 4: Integration Validation**
+  - Run: `bash scripts/bootstrap.sh` - All services start
+  - Run: `uv run python main.py "Create factorial function"` - Works
+  - Run: `uv run python main.py --workflow code-generation-v1 "..."` - Works
+  - Run: `bash scripts/kill.sh` - Clean shutdown
+- **Quality Gate 5: Backward Compatibility**
+  - Verify Phase 5 behavior unchanged when --workflow not specified
+  - Run existing integration tests - all pass
+  - Verify existing orchestrator functions still work
 - Execute all validation commands listed below
-- Ensure zero errors before marking feature complete
-- Fix any issues that arise
-- Verify backward compatibility with Phase 5
+- Mark feature complete only when ALL quality gates pass
 
 ## Testing Strategy
 
@@ -435,6 +551,7 @@ Refactor existing orchestrator to use workflow engine:
 
 ## Acceptance Criteria
 
+### Functionality
 - [ ] WorkflowEngine can load and parse YAML workflow definitions
 - [ ] Template expressions (`{{ steps.X.outputs.Y }}`) are resolved correctly
 - [ ] Sequential execution pattern works (current Plan → Build → Test pipeline)
@@ -450,8 +567,34 @@ Refactor existing orchestrator to use workflow engine:
 - [ ] Documentation explains workflow engine and YAML specification
 - [ ] README updated with workflow-based orchestration information
 - [ ] Backward compatibility maintained (existing orchestrator still works)
-- [ ] All tests pass
-- [ ] Zero regressions from Phase 5
+
+### Testing & Quality (CRITICAL)
+- [ ] **All 151+ existing tests pass with zero regressions**
+- [ ] Unit tests added for all new modules:
+  - [ ] `tests/unit/test_workflow_models.py` (>90% coverage)
+  - [ ] `tests/unit/test_workflow_context.py` (>90% coverage)
+  - [ ] `tests/unit/test_workflow_engine.py` (>85% coverage)
+  - [ ] `tests/unit/test_workflow_registry.py` (>80% coverage)
+  - [ ] `tests/unit/test_discovery.py` updated (no regressions)
+  - [ ] `tests/unit/test_orchestrator.py` updated (no regressions)
+- [ ] Integration tests added:
+  - [ ] `tests/integration/test_workflow_execution.py` (full workflow scenarios)
+  - [ ] `tests/integration/test_end_to_end.py` updated (workflow path + backward compat)
+- [ ] Test fixtures added to `tests/fixtures/conftest.py`:
+  - [ ] `sample_workflow_definition`
+  - [ ] `sample_workflow_yaml`
+  - [ ] `mock_oras_workflow_pull`
+  - [ ] `mock_workflow_registry`
+- [ ] Test workflows in `tests/workflows/`:
+  - [ ] Valid workflow examples
+  - [ ] Invalid YAML examples
+  - [ ] Edge case workflows
+- [ ] **Overall test coverage ≥87% (maintain or exceed existing)**
+- [ ] **New workflow code coverage ≥85%**
+- [ ] `uv run invoke test` passes 100%
+- [ ] `uv run invoke lint.black-check` passes
+- [ ] `uv run invoke lint.flake8` passes with zero violations
+- [ ] All validation commands (section below) execute successfully
 
 ## Validation Commands
 

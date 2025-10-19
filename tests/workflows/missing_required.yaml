@@ -1,0 +1,7 @@
+metadata:
+  id: test-missing
+  version: 1.0.0
+  # Missing 'name' field
+steps:
+  - id: step1
+    skill: test_skill

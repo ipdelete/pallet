@@ -2,6 +2,7 @@
 
 import pytest
 import json
+from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from src.discovery import (
     RegistryDiscovery,
@@ -10,6 +11,8 @@ from src.discovery import (
     discover_agent,
     discover_agents,
     list_skills,
+    discover_workflow,
+    clear_workflow_cache,
 )
 from tests.fixtures.sample_data import (
     REGISTRY_CATALOG,
@@ -148,18 +151,18 @@ class TestGetAgentCard:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("os.path.exists", return_value=True):
-                with patch("builtins.open", create=True) as mock_open:
-                    mock_open.return_value.__enter__.return_value.read.return_value = (
-                        json.dumps(PLAN_AGENT_CARD)
-                    )
-                    with patch("json.load", return_value=PLAN_AGENT_CARD):
-                        card = registry_discovery.get_agent_card("plan")
+        # Mock os.walk to return the temp directory with the JSON file
+        def mock_walk(path):
+            yield (str(tmp_path), [], ["plan_agent_card.json"])
 
-                        assert card is not None
-                        assert card["name"] == "plan-agent"
-                        assert len(card["skills"]) == 1
+        with patch("subprocess.run", return_value=mock_result):
+            with patch("tempfile.mkdtemp", return_value=str(tmp_path)):
+                with patch("os.walk", side_effect=mock_walk):
+                    card = registry_discovery.get_agent_card("plan")
+
+                    assert card is not None
+                    assert card["name"] == "plan-agent"
+                    assert len(card["skills"]) == 1
 
     def test_get_agent_card_oras_failure(self, registry_discovery):
         """Test agent card retrieval with ORAS failure."""
@@ -381,3 +384,128 @@ class TestConvenienceFunctions:
 
                 assert len(skills) == 1
                 assert skills[0].id == "skill1"
+
+
+@pytest.mark.asyncio
+class TestDiscoverWorkflow:
+    """Tests for discover_workflow function."""
+
+    async def test_discover_workflow_success(self):
+        """Test successful workflow discovery."""
+        mock_workflow = MagicMock()
+        mock_workflow.metadata.name = "Test Workflow"
+
+        with patch(
+            "src.workflow_registry.pull_workflow_from_registry",
+            return_value=Path("/tmp/workflow.yaml"),
+        ):
+            with patch(
+                "src.workflow_engine.load_workflow_from_yaml",
+                return_value=mock_workflow,
+            ):
+                # Clear cache first
+                clear_workflow_cache()
+                workflow = await discover_workflow("test-workflow", "v1")
+
+                assert workflow is not None
+                assert workflow.metadata.name == "Test Workflow"
+
+    async def test_discover_workflow_caching(self):
+        """Test workflow caching."""
+        mock_workflow = MagicMock()
+        mock_workflow.metadata.name = "Test Workflow"
+
+        # Clear cache before test
+        clear_workflow_cache()
+
+        with patch(
+            "src.workflow_registry.pull_workflow_from_registry",
+            return_value=Path("/tmp/workflow.yaml"),
+        ) as mock_pull:
+            with patch(
+                "src.workflow_engine.load_workflow_from_yaml",
+                return_value=mock_workflow,
+            ):
+                workflow1 = await discover_workflow("test-workflow", "v1")
+                workflow2 = await discover_workflow("test-workflow", "v1")
+
+                assert workflow1 is workflow2
+                mock_pull.assert_called_once()  # Only called once due to caching
+
+    async def test_discover_workflow_not_found(self):
+        """Test workflow not found."""
+        # Clear cache before test
+        clear_workflow_cache()
+
+        with patch(
+            "src.workflow_registry.pull_workflow_from_registry", return_value=None
+        ):
+            workflow = await discover_workflow("missing-workflow", "v1")
+
+            assert workflow is None
+
+    async def test_discover_workflow_invalid_yaml(self):
+        """Test workflow with invalid YAML."""
+        # Clear cache before test
+        clear_workflow_cache()
+
+        with patch(
+            "src.workflow_registry.pull_workflow_from_registry",
+            return_value=Path("/tmp/workflow.yaml"),
+        ):
+            with patch(
+                "src.workflow_engine.load_workflow_from_yaml",
+                side_effect=Exception("Invalid YAML"),
+            ):
+                workflow = await discover_workflow("test-workflow", "v1")
+
+                assert workflow is None
+
+    async def test_clear_workflow_cache(self):
+        """Test cache clearing."""
+        mock_workflow = MagicMock()
+        mock_workflow.metadata.name = "Test Workflow"
+
+        # Clear cache before test
+        clear_workflow_cache()
+
+        with patch(
+            "src.workflow_registry.pull_workflow_from_registry",
+            return_value=Path("/tmp/workflow.yaml"),
+        ) as mock_pull:
+            with patch(
+                "src.workflow_engine.load_workflow_from_yaml",
+                return_value=mock_workflow,
+            ):
+                await discover_workflow("test-workflow", "v1")
+                clear_workflow_cache()
+                await discover_workflow("test-workflow", "v1")
+
+                # Should pull twice since cache was cleared
+                assert mock_pull.call_count == 2
+
+    async def test_discover_workflow_different_versions(self):
+        """Test discovering different versions of same workflow."""
+        mock_workflow_v1 = MagicMock()
+        mock_workflow_v1.metadata.name = "Test Workflow v1"
+        mock_workflow_v2 = MagicMock()
+        mock_workflow_v2.metadata.name = "Test Workflow v2"
+
+        # Clear cache before test
+        clear_workflow_cache()
+
+        with patch("src.workflow_registry.pull_workflow_from_registry") as mock_pull:
+            with patch("src.workflow_engine.load_workflow_from_yaml") as mock_load:
+                # Setup different returns for different versions
+                mock_pull.side_effect = [
+                    Path("/tmp/workflow_v1.yaml"),
+                    Path("/tmp/workflow_v2.yaml"),
+                ]
+                mock_load.side_effect = [mock_workflow_v1, mock_workflow_v2]
+
+                workflow_v1 = await discover_workflow("test-workflow", "v1")
+                workflow_v2 = await discover_workflow("test-workflow", "v2")
+
+                assert workflow_v1.metadata.name == "Test Workflow v1"
+                assert workflow_v2.metadata.name == "Test Workflow v2"
+                assert mock_pull.call_count == 2

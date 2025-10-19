@@ -4,16 +4,23 @@ Chains three agents together: Plan → Build → Test
 Uses dynamic discovery to find agents from registry.
 No error handling, retries, or state management.
 Saves results to app/ folder.
+
+Phase 6: Workflow Engine Integration
+Supports workflow-based orchestration while maintaining backward compatibility.
 """
 
 import json
 import os
-from typing import Optional
+import time
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 import httpx
-from src.discovery import discover_agent
+from src.discovery import discover_workflow
+from src.workflow_engine import WorkflowEngine
+from src.logging_config import configure_module_logging
 
+logger = configure_module_logging("orchestrator")
 
 REGISTRY_URL = "http://localhost:5000"
 
@@ -99,8 +106,88 @@ def save_results(
     print("  - metadata.json (pipeline metadata)")
 
 
-async def orchestrate(requirements: str) -> None:
+async def execute_workflow_by_id(
+    workflow_id: str, workflow_input: Dict[str, Any], version: str = "v1"
+) -> Dict[str, Any]:
+    """
+    Execute a workflow by ID from the registry.
+
+    Args:
+        workflow_id: Workflow identifier (e.g., "code-generation-v1")
+        workflow_input: Input data for workflow
+        version: Workflow version (default: v1)
+
+    Returns:
+        Dict containing workflow results and metadata
+
+    Example:
+        result = await execute_workflow_by_id(
+            "code-generation-v1",
+            {"requirements": "Create factorial function"}
+        )
+    """
+    start_time = time.time()
+    logger.info(f"Executing workflow: {workflow_id}:{version}")
+    logger.debug(f"Workflow input: {workflow_input}")
+
+    try:
+        # Discover workflow from registry
+        logger.info(f"Discovering workflow: {workflow_id}:{version}")
+        workflow = await discover_workflow(workflow_id, version)
+        if not workflow:
+            logger.error(f"Workflow not found: {workflow_id}:{version}")
+            raise ValueError(f"Workflow not found: {workflow_id}:{version}")
+
+        logger.info(
+            f"Loaded workflow: {workflow.metadata.name} (v{workflow.metadata.version})"
+        )
+        logger.debug(f"Workflow has {len(workflow.steps)} steps")
+
+        # Execute workflow
+        logger.info("Starting workflow execution")
+        engine = WorkflowEngine()
+        context = await engine.execute_workflow(workflow, workflow_input)
+
+        # Build result
+        result = {
+            "workflow_id": workflow.metadata.id,
+            "workflow_name": workflow.metadata.name,
+            "workflow_version": workflow.metadata.version,
+            "initial_input": workflow_input,
+            "step_outputs": context.step_outputs,
+            "final_output": _extract_final_output(context),
+        }
+
+        elapsed = time.time() - start_time
+        logger.info(f"Workflow completed successfully in {elapsed:.1f}s")
+        logger.info(f"Final output keys: {list(result.get('final_output', {}).keys())}")
+
+        return result
+
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(
+            f"Workflow execution failed after {elapsed:.1f}s: {e}", exc_info=True
+        )
+        raise
+
+
+def _extract_final_output(context) -> Dict[str, Any]:
+    """Extract the final output from the last step."""
+    if not context.step_outputs:
+        return {}
+
+    # Get last step's output
+    last_step_id = list(context.step_outputs.keys())[-1]
+    return context.step_outputs[last_step_id].get("outputs", {})
+
+
+async def orchestrate(requirements: str) -> Dict[str, Any]:
     """Run the three-agent orchestration pipeline.
+
+    Legacy orchestration function (hardcoded Plan → Build → Test).
+
+    DEPRECATED: Use execute_workflow_by_id() with "code-generation-v1" instead.
 
     Linear flow:
     1. Discover Plan Agent from registry
@@ -113,90 +200,32 @@ async def orchestrate(requirements: str) -> None:
 
     Args:
         requirements: User requirements text
+
+    Returns:
+        Dict with plan, code, and review results
     """
-    print("\n" + "=" * 70)
-    print("PALLET ORCHESTRATOR - Phase 5: Simple Linear Pipeline")
-    print("=" * 70 + "\n")
+    print("\n[Orchestrator] Using legacy hardcoded orchestration (DEPRECATED)")
+    print("[Orchestrator] Consider using workflow-based orchestration instead\n")
 
-    # Step 0: Discover agents
-    print("🔍 Step 0: Discovering Agents from Registry")
-    print("-" * 70)
-
-    plan_agent_url = discover_agent("create_plan", REGISTRY_URL)
-    build_agent_url = discover_agent("generate_code", REGISTRY_URL)
-    test_agent_url = discover_agent("review_code", REGISTRY_URL)
-
-    print(f"  Plan Agent:  {plan_agent_url}")
-    print(f"  Build Agent: {build_agent_url}")
-    print(f"  Test Agent:  {test_agent_url}")
-    print()
-
-    # Step 1: Plan Agent
-    print("📋 Step 1: Plan Agent - Creating Implementation Plan")
-    print("-" * 70)
-    print(f"Requirements: {requirements}\n")
-
-    plan_response = await call_agent_skill(
-        plan_agent_url, "create_plan", {"requirements": requirements}
+    # Delegate to workflow engine
+    result = await execute_workflow_by_id(
+        "code-generation-v1", {"requirements": requirements}
     )
-    plan = plan_response["result"]
 
-    print("✓ Plan generated:")
-    print(json.dumps(plan, indent=2))
-    print()
+    # Transform to legacy format for compatibility
+    plan_out = result["step_outputs"].get("plan", {}).get("outputs", {})
+    build_out = result["step_outputs"].get("build", {}).get("outputs", {})
+    test_out = result["step_outputs"].get("test", {}).get("outputs", {})
 
-    # Step 2: Build Agent
-    print("📝 Step 2: Build Agent - Generating Code")
-    print("-" * 70)
-
-    code_response = await call_agent_skill(
-        build_agent_url, "generate_code", {"plan": plan}
-    )
-    code_result = code_response["result"]
-    code = code_result.get("code", "")
-
-    print(f"Language: {code_result.get('language', 'unknown')}")
-    print(f"Functions: {code_result.get('functions', [])}")
-    print("\nCode generated:")
-    code_lines = code.split("\n")[:20]
-    print("\n".join(code_lines))
-    if len(code.split("\n")) > 20:
-        print(f"... ({len(code.split(chr(10))) - 20} more lines)")
-    print()
-
-    # Step 3: Test Agent
-    print("🧪 Step 3: Test Agent - Reviewing Code")
-    print("-" * 70)
-
-    review_response = await call_agent_skill(
-        test_agent_url,
-        "review_code",
-        {"code": code, "language": code_result.get("language", "python")},
-    )
-    review = review_response["result"]
-
-    print(f"Quality Score: {review.get('quality_score', 0)}/10")
-    print(f"Approved: {'✓ Yes' if review.get('approved') else '✗ No'}")
-    print(f"Summary: {review.get('summary', 'N/A')}")
-    print()
-
-    # Save results to app folder
-    app_dir = ensure_app_folder()
-    save_results(app_dir, plan, code_result, review, requirements)
-
-    # Print final results
-    print("=" * 70)
-    print("ORCHESTRATION COMPLETE")
-    print("=" * 70 + "\n")
-
-    print("SUMMARY:")
-    print(f"  Plan Title: {plan.get('title', 'N/A')}")
-    print(f"  Plan Steps: {len(plan.get('steps', []))}")
-    print(f"  Code Language: {code_result.get('language', 'unknown')}")
-    print(f"  Code Functions: {len(code_result.get('functions', []))}")
-    print(f"  Review Score: {review.get('quality_score', 0)}/10")
-    print(f"  Code Approved: {'✓ Yes' if review.get('approved') else '✗ No'}")
-    print()
+    return {
+        "plan": plan_out.get("result"),
+        "code": build_out.get("result"),
+        "review": test_out.get("result"),
+        "metadata": {
+            "workflow_id": result["workflow_id"],
+            "workflow_version": result["workflow_version"],
+        },
+    }
 
 
 async def main(requirements: Optional[str] = None) -> None:

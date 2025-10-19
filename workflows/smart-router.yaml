@@ -1,0 +1,43 @@
+metadata:
+  id: smart-router-v1
+  name: Smart Request Router
+  version: 1.0.0
+  description: "Analyzes request type and routes to appropriate workflow"
+  tags:
+    - routing
+    - conditional
+    - meta-workflow
+
+steps:
+  - id: analyze
+    skill: analyze_request
+    inputs:
+      request: "{{ workflow.input.requirements }}"
+    outputs: request_type
+    timeout: 60
+    step_type: sequential
+
+  - id: route
+    skill: route_workflow
+    step_type: switch
+    condition: "{{ steps.analyze.outputs.request_type }}"
+    branches:
+      code_generation:
+        - id: generate_code_workflow
+          skill: execute_workflow
+          inputs:
+            workflow_id: code-generation-v1
+            input: "{{ workflow.input }}"
+
+      data_analysis:
+        - id: analyze_data_workflow
+          skill: execute_workflow
+          inputs:
+            workflow_id: data-analysis-v1
+            input: "{{ workflow.input }}"
+
+      default:
+        - id: fallback
+          skill: create_plan
+          inputs:
+            requirements: "{{ workflow.input.requirements }}"
