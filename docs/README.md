@@ -41,6 +41,13 @@ This documentation provides everything you need to understand and implement the 
    - Common patterns and snippets
    - Debugging tips and solutions
 
+6. **[Logging & Observability Guide](./LOGGING_GUIDE.md)**
+   - Structured logging configuration
+   - Debug modes and log levels
+   - Diagnostic CLI commands
+   - Performance monitoring and metrics
+   - Troubleshooting scenarios
+
 ## 🎯 Start Here Based on Your Goal
 
 ### "I want to understand the concept"
@@ -57,6 +64,9 @@ This documentation provides everything you need to understand and implement the 
 
 ### "I need to set up discovery"
 → Follow [Registry and Discovery](./REGISTRY_AND_DISCOVERY.md) - Setting Up a Registry
+
+### "I need to debug issues or monitor performance"
+→ Read [Logging & Observability Guide](./LOGGING_GUIDE.md) - Diagnostic CLI Commands and Performance Metrics
 
 ## 🔑 Key Concepts
 
