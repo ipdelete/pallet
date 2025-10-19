@@ -112,7 +112,6 @@ class RegistryDiscovery:
                     f"{registry_ref}/agents/{agent_name}:{tag}",
                     "-o",
                     pull_dir,
-                    "--allow-path-traversal",
                 ],
                 capture_output=True,
                 text=True,
