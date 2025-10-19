@@ -42,7 +42,8 @@ class TestFullOrchestration:
 
         # Mock workflow discovery and execution
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             # Mock context
@@ -90,7 +91,8 @@ class TestFullOrchestration:
 
         # Mock workflow discovery and execution
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             with patch(
@@ -127,7 +129,8 @@ class TestFullOrchestration:
 
         # Mock workflow discovery and execution
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             with patch(
@@ -172,7 +175,8 @@ class TestDiscoveryIntegration:
             pytest.skip("Workflow file not found")
 
         with patch("src.orchestrator.discover_workflow") as mock_discover_workflow:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover_workflow.return_value = workflow
 
             with patch("src.workflow_engine.discover_agent") as mock_discover_agent:
@@ -213,7 +217,8 @@ class TestErrorScenarios:
             pytest.skip("Workflow file not found")
 
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             with patch(

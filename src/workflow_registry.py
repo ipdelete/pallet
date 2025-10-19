@@ -223,7 +223,8 @@ def get_workflow_metadata(
     try:
         from src.workflow_engine import load_workflow_from_yaml
 
-        workflow = load_workflow_from_yaml(workflow_path)
+        yaml_content = Path(workflow_path).read_text()
+        workflow = load_workflow_from_yaml(yaml_content)
         return {
             "id": workflow.metadata.id,
             "name": workflow.metadata.name,

@@ -287,14 +287,16 @@ steps:
             temp_path = f.name
 
         try:
-            workflow = load_workflow_from_yaml(temp_path)
+            # Read file contents first, then pass YAML string
+            yaml_str = Path(temp_path).read_text()
+            workflow = load_workflow_from_yaml(yaml_str)
             assert workflow.metadata.id == "file-workflow"
             assert workflow.metadata.name == "File Workflow"
         finally:
             Path(temp_path).unlink()
 
     def test_load_from_yaml_file_path_object(self):
-        """Test loading workflow from Path object."""
+        """Test loading workflow from Path object (file contents)."""
         yaml_content = """
 metadata:
   id: path-workflow
@@ -309,7 +311,9 @@ steps:
             temp_path = Path(f.name)
 
         try:
-            workflow = load_workflow_from_yaml(temp_path)
+            # Read file contents first, then pass YAML string
+            yaml_str = temp_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_str)
             assert workflow.metadata.id == "path-workflow"
         finally:
             temp_path.unlink()

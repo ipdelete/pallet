@@ -189,7 +189,8 @@ class TestOrchestrate:
             pytest.skip("Workflow file not found")
 
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             mock_context = WorkflowContext(
@@ -229,7 +230,8 @@ class TestOrchestrate:
             pytest.skip("Workflow file not found")
 
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             mock_context = WorkflowContext(
@@ -267,7 +269,8 @@ class TestOrchestrate:
             pytest.skip("Workflow file not found")
 
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             mock_context = WorkflowContext(initial_input={"requirements": "test"})
@@ -303,7 +306,8 @@ class TestOrchestrate:
             pytest.skip("Workflow file not found")
 
         with patch("src.orchestrator.discover_workflow") as mock_discover:
-            workflow = load_workflow_from_yaml(workflow_path)
+            yaml_content = workflow_path.read_text()
+            workflow = load_workflow_from_yaml(yaml_content)
             mock_discover.return_value = workflow
 
             mock_context = WorkflowContext(initial_input={"requirements": "test"})

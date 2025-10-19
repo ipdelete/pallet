@@ -183,21 +183,22 @@ start_registry() {
 publish_agent_cards() {
     log_info "Publishing agent cards to registry..."
 
-    cd "$PALLET_ROOT"
+    # Change to agent_cards directory to use relative paths
+    cd "$AGENT_CARDS_DIR"
 
     for agent in "${!AGENTS[@]}"; do
-        local card_file="$AGENT_CARDS_DIR/${agent}_agent_card.json"
+        local card_filename="${agent}_agent_card.json"
         local registry_path="$REGISTRY_URL/$REGISTRY_NAMESPACE/$agent:v1"
 
-        if [ ! -f "$card_file" ]; then
-            log_error "Agent card not found: $card_file"
+        if [ ! -f "$card_filename" ]; then
+            log_error "Agent card not found: $card_filename"
             exit 1
         fi
 
         log_info "Publishing ${agent} agent card..."
 
-        # Push agent card to registry using ORAS
-        if oras push "$registry_path" "$card_file" --disable-path-validation > /tmp/oras_push.log 2>&1; then
+        # Push agent card to registry using ORAS with relative path
+        if oras push "$registry_path" "$card_filename:application/json" > /tmp/oras_push.log 2>&1; then
             log_success "${agent} agent card published"
         else
             log_error "Failed to publish ${agent} agent card"
@@ -205,6 +206,9 @@ publish_agent_cards() {
             exit 1
         fi
     done
+
+    # Return to project root
+    cd "$PALLET_ROOT"
 
     log_success "All agent cards published"
     echo ""

@@ -112,7 +112,6 @@ class RegistryDiscovery:
                     f"{registry_ref}/agents/{agent_name}:{tag}",
                     "-o",
                     pull_dir,
-                    "--allow-path-traversal",
                 ],
                 capture_output=True,
                 text=True,
@@ -392,8 +391,11 @@ async def discover_workflow(
         return None
 
     try:
-        # Load and validate
-        workflow = load_workflow_from_yaml(workflow_path)
+        # Read file contents and parse YAML
+        from pathlib import Path
+
+        yaml_content = Path(workflow_path).read_text()
+        workflow = load_workflow_from_yaml(yaml_content)
         print(f"[Discovery] Loaded workflow: {workflow.metadata.name}")
 
         # Cache it
