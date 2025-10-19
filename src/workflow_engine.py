@@ -163,11 +163,11 @@ def load_workflow_from_yaml(yaml_content: str) -> WorkflowDefinition:
         pydantic.ValidationError: If workflow structure is invalid
 
     Example:
-        # Runtime: Pull from registry, then load
-        workflow = await discover_workflow("code-generation-v1")
+        # Runtime: Pull from registry, then load (inside an async function)
+        workflow = await discover_workflow("code-generation-v1")  # inside an async function
 
         # Or manually:
-        yaml_str = Path("workflows/example.yaml").read_text()
+        yaml_str = open("workflows/example.yaml").read()
         workflow = load_workflow_from_yaml(yaml_str)
     """
     data = yaml.safe_load(yaml_content)
