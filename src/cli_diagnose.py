@@ -156,6 +156,7 @@ def cmd_lookup_workflow(workflow_id: str, version: str = "v1"):
 
         print("\n[Loading workflow definition...]")
         from pathlib import Path
+
         yaml_content = Path(workflow_path).read_text()
         workflow = load_workflow_from_yaml(yaml_content)
 

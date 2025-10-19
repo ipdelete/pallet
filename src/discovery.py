@@ -394,6 +394,7 @@ async def discover_workflow(
     try:
         # Read file contents and parse YAML
         from pathlib import Path
+
         yaml_content = Path(workflow_path).read_text()
         workflow = load_workflow_from_yaml(yaml_content)
         print(f"[Discovery] Loaded workflow: {workflow.metadata.name}")
