@@ -11,13 +11,16 @@ Supports workflow-based orchestration while maintaining backward compatibility.
 
 import json
 import os
+import time
 from typing import Optional, Dict, Any
 from datetime import datetime
 
 import httpx
 from src.discovery import discover_workflow
 from src.workflow_engine import WorkflowEngine
+from src.logging_config import configure_module_logging
 
+logger = configure_module_logging("orchestrator")
 
 REGISTRY_URL = "http://localhost:5000"
 
@@ -123,29 +126,50 @@ async def execute_workflow_by_id(
             {"requirements": "Create factorial function"}
         )
     """
-    print(f"\n[Orchestrator] Executing workflow: {workflow_id}:{version}")
+    start_time = time.time()
+    logger.info(f"Executing workflow: {workflow_id}:{version}")
+    logger.debug(f"Workflow input: {workflow_input}")
 
-    # Discover workflow from registry
-    workflow = await discover_workflow(workflow_id, version)
-    if not workflow:
-        raise ValueError(f"Workflow not found: {workflow_id}:{version}")
+    try:
+        # Discover workflow from registry
+        logger.info(f"Discovering workflow: {workflow_id}:{version}")
+        workflow = await discover_workflow(workflow_id, version)
+        if not workflow:
+            logger.error(f"Workflow not found: {workflow_id}:{version}")
+            raise ValueError(f"Workflow not found: {workflow_id}:{version}")
 
-    # Execute workflow
-    engine = WorkflowEngine()
-    context = await engine.execute_workflow(workflow, workflow_input)
+        logger.info(
+            f"Loaded workflow: {workflow.metadata.name} (v{workflow.metadata.version})"
+        )
+        logger.debug(f"Workflow has {len(workflow.steps)} steps")
 
-    # Build result
-    result = {
-        "workflow_id": workflow.metadata.id,
-        "workflow_name": workflow.metadata.name,
-        "workflow_version": workflow.metadata.version,
-        "initial_input": workflow_input,
-        "step_outputs": context.step_outputs,
-        "final_output": _extract_final_output(context),
-    }
+        # Execute workflow
+        logger.info("Starting workflow execution")
+        engine = WorkflowEngine()
+        context = await engine.execute_workflow(workflow, workflow_input)
 
-    print("[Orchestrator] Workflow completed successfully")
-    return result
+        # Build result
+        result = {
+            "workflow_id": workflow.metadata.id,
+            "workflow_name": workflow.metadata.name,
+            "workflow_version": workflow.metadata.version,
+            "initial_input": workflow_input,
+            "step_outputs": context.step_outputs,
+            "final_output": _extract_final_output(context),
+        }
+
+        elapsed = time.time() - start_time
+        logger.info(f"Workflow completed successfully in {elapsed:.1f}s")
+        logger.info(f"Final output keys: {list(result.get('final_output', {}).keys())}")
+
+        return result
+
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(
+            f"Workflow execution failed after {elapsed:.1f}s: {e}", exc_info=True
+        )
+        raise
 
 
 def _extract_final_output(context) -> Dict[str, Any]:

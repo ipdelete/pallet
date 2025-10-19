@@ -151,18 +151,18 @@ class TestGetAgentCard:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("os.path.exists", return_value=True):
-                with patch("builtins.open", create=True) as mock_open:
-                    mock_open.return_value.__enter__.return_value.read.return_value = (
-                        json.dumps(PLAN_AGENT_CARD)
-                    )
-                    with patch("json.load", return_value=PLAN_AGENT_CARD):
-                        card = registry_discovery.get_agent_card("plan")
+        # Mock os.walk to return the temp directory with the JSON file
+        def mock_walk(path):
+            yield (str(tmp_path), [], ["plan_agent_card.json"])
 
-                        assert card is not None
-                        assert card["name"] == "plan-agent"
-                        assert len(card["skills"]) == 1
+        with patch("subprocess.run", return_value=mock_result):
+            with patch("tempfile.mkdtemp", return_value=str(tmp_path)):
+                with patch("os.walk", side_effect=mock_walk):
+                    card = registry_discovery.get_agent_card("plan")
+
+                    assert card is not None
+                    assert card["name"] == "plan-agent"
+                    assert len(card["skills"]) == 1
 
     def test_get_agent_card_oras_failure(self, registry_discovery):
         """Test agent card retrieval with ORAS failure."""

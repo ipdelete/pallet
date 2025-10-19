@@ -13,11 +13,15 @@ import re
 import yaml
 import asyncio
 import httpx
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 from src.discovery import discover_agent
+from src.logging_config import configure_module_logging
+
+logger = configure_module_logging("workflow_engine")
 
 
 class StepType(str, Enum):
@@ -460,45 +464,65 @@ class WorkflowEngine:
         Returns:
             Final workflow context with all step outputs
         """
-        print(f"[WorkflowEngine] Starting workflow: {workflow.metadata.name}")
-        print(f"[WorkflowEngine] Workflow ID: {workflow.metadata.id}")
-        print(f"[WorkflowEngine] Steps: {len(workflow.steps)}")
+        workflow_start = time.time()
+        logger.info(f"Starting workflow: {workflow.metadata.name}")
+        logger.info(f"Workflow ID: {workflow.metadata.id}")
+        logger.info(f"Workflow version: {workflow.metadata.version}")
+        logger.info(f"Number of steps: {len(workflow.steps)}")
+        logger.debug(f"Workflow description: {workflow.metadata.description}")
+        logger.debug(f"Initial input: {initial_input}")
 
         # Initialize context
         context = WorkflowContext(initial_input)
 
         # Execute steps
+        step_times = {}
         for step in workflow.steps:
-            print(
-                f"\n[WorkflowEngine] Processing step: {step.id} "
-                f"(type: {step.step_type})"
-            )
+            logger.info(f"Processing step: {step.id} (type: {step.step_type})")
+            logger.debug(f"Step skill: {step.skill}")
+            step_start = time.time()
 
-            if step.step_type == StepType.SEQUENTIAL:
-                result = await self.execute_step(step, context)
-                # Store output in context
-                if step.outputs:
-                    context.set_step_output(step.id, {step.outputs: result})
+            try:
+                if step.step_type == StepType.SEQUENTIAL:
+                    result = await self.execute_step(step, context)
+                    # Store output in context
+                    if step.outputs:
+                        context.set_step_output(step.id, {step.outputs: result})
+                    else:
+                        context.set_step_output(step.id, result)
+
+                elif step.step_type == StepType.PARALLEL:
+                    # For parallel, step.branches should contain list of steps
+                    if not step.branches or "steps" not in step.branches:
+                        raise ValueError(
+                            f"Parallel step {step.id} missing 'steps' in branches"
+                        )
+                    parallel_steps = [WorkflowStep(**s) for s in step.branches["steps"]]
+                    await self.execute_parallel_steps(parallel_steps, context)
+
+                elif step.step_type == StepType.CONDITIONAL:
+                    await self.execute_conditional_step(step, context)
+
+                elif step.step_type == StepType.SWITCH:
+                    await self.execute_switch_step(step, context)
+
                 else:
-                    context.set_step_output(step.id, result)
+                    raise ValueError(f"Unknown step type: {step.step_type}")
 
-            elif step.step_type == StepType.PARALLEL:
-                # For parallel, step.branches should contain list of steps
-                if not step.branches or "steps" not in step.branches:
-                    raise ValueError(
-                        f"Parallel step {step.id} missing 'steps' in branches"
-                    )
-                parallel_steps = [WorkflowStep(**s) for s in step.branches["steps"]]
-                await self.execute_parallel_steps(parallel_steps, context)
+                elapsed = time.time() - step_start
+                step_times[step.id] = elapsed
+                logger.info(f"Step {step.id} completed in {elapsed:.2f}s")
 
-            elif step.step_type == StepType.CONDITIONAL:
-                await self.execute_conditional_step(step, context)
+            except Exception as e:
+                elapsed = time.time() - step_start
+                logger.error(
+                    f"Step {step.id} failed after {elapsed:.2f}s: {e}", exc_info=True
+                )
+                raise
 
-            elif step.step_type == StepType.SWITCH:
-                await self.execute_switch_step(step, context)
-
-            else:
-                raise ValueError(f"Unknown step type: {step.step_type}")
-
-        print(f"\n[WorkflowEngine] Workflow completed: {workflow.metadata.name}")
+        total_elapsed = time.time() - workflow_start
+        logger.info(f"Workflow completed: {workflow.metadata.name}")
+        logger.info(f"Total execution time: {total_elapsed:.2f}s")
+        for step_id, step_time in step_times.items():
+            logger.info(f"  - {step_id}: {step_time:.2f}s")
         return context

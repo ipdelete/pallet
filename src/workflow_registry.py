@@ -6,12 +6,17 @@ Workflows are stored in the registry under workflows/{workflow-id}:v{version}.
 
 import subprocess
 import tempfile
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 import httpx
 
+from src.logging_config import configure_module_logging
+
+logger = configure_module_logging("workflow_registry")
 
 REGISTRY_URL = "localhost:5000"
+ORAS_VERBOSE = os.getenv("PALLET_ORAS_VERBOSE", "0") == "1"
 
 
 def push_workflow_to_registry(
@@ -35,28 +40,37 @@ def push_workflow_to_registry(
             "v1"
         )
     """
+    logger.info(f"Pushing workflow to registry: {workflow_id}:{version}")
+    logger.debug(f"Workflow file: {workflow_file}")
+
     if not workflow_file.exists():
-        print(f"Error: Workflow file not found: {workflow_file}")
+        logger.error(f"Workflow file not found: {workflow_file}")
         return False
 
     registry_path = f"{REGISTRY_URL}/workflows/{workflow_id}:{version}"
+    logger.debug(f"Registry path: {registry_path}")
 
     try:
-        subprocess.run(
-            ["oras", "push", registry_path, f"{workflow_file}:application/yaml"],
+        cmd = ["oras", "push", registry_path, f"{workflow_file}:application/yaml"]
+        logger.debug(f"Executing: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             text=True,
             check=True,
         )
 
-        print(f"✓ Pushed workflow {workflow_id}:{version} to registry")
+        logger.info(f"Successfully pushed workflow {workflow_id}:{version} to registry")
+        if ORAS_VERBOSE and result.stdout:
+            logger.debug(f"ORAS output: {result.stdout}")
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"✗ Failed to push workflow: {e.stderr}")
+        logger.error(f"Failed to push workflow: {e.stderr}", exc_info=True)
         return False
     except FileNotFoundError:
-        print("✗ ORAS not found. Install with: bash scripts/install-oras.sh")
+        logger.error("ORAS not found. Install with: bash scripts/install-oras.sh")
         return False
 
 
@@ -68,6 +82,7 @@ def pull_workflow_from_registry(
 
     Args:
         workflow_id: Unique workflow identifier
+            (may include version suffix like "code-generation-v1")
         version: Workflow version (default: v1)
         output_dir: Directory to save workflow (default: temp directory)
 
@@ -76,34 +91,77 @@ def pull_workflow_from_registry(
 
     Example:
         workflow_path = pull_workflow_from_registry("code-generation", "v1")
+        # Also works with version suffix:
+        workflow_path = pull_workflow_from_registry("code-generation-v1", "v1")
     """
+    logger.info(f"Pulling workflow from registry: {workflow_id}:{version}")
+    logger.debug(f"Input workflow_id: {workflow_id}")
+
     if output_dir is None:
         output_dir = Path(tempfile.mkdtemp())
+    logger.debug(f"Output directory: {output_dir}")
 
-    registry_path = f"{REGISTRY_URL}/workflows/{workflow_id}:{version}"
+    # Strip version suffix from workflow_id if present
+    # (e.g., "code-generation-v1" -> "code-generation")
+    # This handles the case where workflow metadata ID includes version info
+    base_workflow_id = workflow_id
+    if (
+        workflow_id.endswith("-v1")
+        or workflow_id.endswith("-v2")
+        or workflow_id.endswith("-v3")
+    ):
+        # Extract base name by removing -vN suffix
+        import re
+
+        match = re.match(r"^(.+?)-v\d+$", workflow_id)
+        if match:
+            base_workflow_id = match.group(1)
+            logger.debug(f"Stripped version suffix: {workflow_id} → {base_workflow_id}")
+
+    registry_path = f"{REGISTRY_URL}/workflows/{base_workflow_id}:{version}"
+    logger.debug(f"Registry path: {registry_path}")
 
     try:
-        subprocess.run(
-            ["oras", "pull", registry_path, "-o", str(output_dir)],
+        cmd = ["oras", "pull", registry_path, "-o", str(output_dir)]
+        logger.debug(f"Executing: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             text=True,
             check=True,
         )
 
-        # Find the YAML file in output directory
+        if ORAS_VERBOSE and result.stdout:
+            logger.debug(f"ORAS output: {result.stdout}")
+
+        # Find the YAML file in output directory (ORAS may create subdirectories)
+        logger.debug("Searching for YAML files in output directory")
         yaml_files = list(output_dir.glob("*.yaml")) + list(output_dir.glob("*.yml"))
+
+        if not yaml_files:
+            logger.debug("No YAML files in root, searching subdirectories")
+            # Look in subdirectories (ORAS may preserve directory structure)
+            yaml_files = list(output_dir.glob("**/*.yaml")) + list(
+                output_dir.glob("**/*.yml")
+            )
+
         if yaml_files:
-            print(f"✓ Pulled workflow {workflow_id}:{version} from registry")
-            return yaml_files[0]
+            selected_file = yaml_files[0]
+            logger.info(f"Successfully pulled workflow {workflow_id}:{version}")
+            logger.debug(f"Selected workflow file: {selected_file}")
+            return selected_file
         else:
-            print("✗ No YAML file found in pulled artifacts")
+            found_files = list(output_dir.rglob("*"))
+            logger.error("No YAML file found in pulled artifacts")
+            logger.debug(f"Directory contents: {found_files}")
             return None
 
     except subprocess.CalledProcessError as e:
-        print(f"✗ Failed to pull workflow: {e.stderr}")
+        logger.error(f"Failed to pull workflow: {e.stderr}", exc_info=True)
         return None
     except FileNotFoundError:
-        print("✗ ORAS not found. Install with: bash scripts/install-oras.sh")
+        logger.error("ORAS not found. Install with: bash scripts/install-oras.sh")
         return None
 
 

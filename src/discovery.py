@@ -7,6 +7,10 @@ import os
 from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
+from src.logging_config import configure_module_logging
+
+logger = configure_module_logging("discovery")
+
 if TYPE_CHECKING:
     from src.workflow_engine import WorkflowDefinition
 
@@ -95,6 +99,11 @@ class RegistryDiscovery:
                 "https://", ""
             )
 
+            # Create a temp directory for this pull to avoid conflicts
+            import tempfile
+
+            pull_dir = tempfile.mkdtemp()
+
             # Use ORAS to pull the agent card
             result = subprocess.run(
                 [
@@ -102,7 +111,7 @@ class RegistryDiscovery:
                     "pull",
                     f"{registry_ref}/agents/{agent_name}:{tag}",
                     "-o",
-                    "/tmp",
+                    pull_dir,
                     "--allow-path-traversal",
                 ],
                 capture_output=True,
@@ -114,14 +123,19 @@ class RegistryDiscovery:
                 print(f"ORAS pull failed for {agent_name}: {result.stderr}")
                 return None
 
-            # Read the pulled JSON file
-            card_file = f"/tmp/{agent_name}_agent_card.json"
+            # Find the JSON file (ORAS may create subdirectories)
+            json_files = []
+            for root, dirs, files in os.walk(pull_dir):
+                for file in files:
+                    if file.endswith("_agent_card.json"):
+                        json_files.append(os.path.join(root, file))
 
-            if not os.path.exists(card_file):
-                print(f"Agent card file not found: {card_file}")
+            if not json_files:
+                print(f"Agent card file not found for {agent_name}")
                 return None
 
-            with open(card_file, "r") as f:
+            # Read the first JSON file found
+            with open(json_files[0], "r") as f:
                 return json.load(f)
 
         except Exception as e:
@@ -239,11 +253,20 @@ class RegistryDiscovery:
 
 # Convenience functions for direct usage
 
+# Known skill to agent port mappings (for fallback discovery)
+KNOWN_AGENT_PORTS = {
+    "create_plan": 8001,
+    "generate_code": 8002,
+    "review_code": 8003,
+}
+
 
 def discover_agent(
     skill_id: str, registry_url: str = "http://localhost:5000"
 ) -> Optional[str]:
     """Convenience function: Find agent URL by skill ID.
+
+    Tries registry first, then falls back to known hardcoded ports.
 
     Args:
         skill_id: Skill ID to find (e.g., "create_plan")
@@ -252,10 +275,45 @@ def discover_agent(
     Returns:
         Agent URL if found, None otherwise
     """
-    discovery = RegistryDiscovery(registry_url)
-    agent = discovery.find_agent_by_skill(skill_id)
-    discovery.close()
-    return agent.url if agent else None
+    logger.debug(f"Discovering agent for skill: {skill_id}")
+
+    # Try registry discovery first
+    try:
+        logger.debug(f"Attempting registry discovery at {registry_url}")
+        discovery = RegistryDiscovery(registry_url)
+        agent = discovery.find_agent_by_skill(skill_id)
+        discovery.close()
+        if agent:
+            logger.info(f"Found agent for {skill_id} via registry: {agent.url}")
+            return agent.url
+        logger.debug(f"No agent found in registry for {skill_id}")
+    except Exception as e:
+        logger.warning(f"Registry discovery failed for {skill_id}: {e}", exc_info=True)
+
+    # Fallback to known agent ports
+    if skill_id in KNOWN_AGENT_PORTS:
+        port = KNOWN_AGENT_PORTS[skill_id]
+        agent_url = f"http://localhost:{port}"
+        logger.debug(f"Trying fallback discovery for {skill_id} at {agent_url}")
+
+        try:
+            # Verify agent is running
+            response = httpx.get(f"{agent_url}/agent-card", timeout=5.0)
+            if response.status_code == 200:
+                logger.info(
+                    f"Found agent for {skill_id} via fallback port {port}: {agent_url}"
+                )
+                return agent_url
+            logger.debug(f"Agent at {agent_url} returned status {response.status_code}")
+        except httpx.RequestError as e:
+            logger.debug(
+                f"Fallback discovery failed for {skill_id} at {agent_url}: {e}"
+            )
+    else:
+        logger.warning(f"No known port mapping for skill: {skill_id}")
+
+    logger.error(f"Could not discover agent for skill: {skill_id}")
+    return None
 
 
 def discover_agents(

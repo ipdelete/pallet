@@ -1,7 +1,7 @@
 """Base agent class for A2A protocol implementation."""
 
 import asyncio
-import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
@@ -9,8 +9,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 
-
-logger = logging.getLogger(__name__)
+from src.logging_config import configure_agent_logging
 
 
 class Message(BaseModel):
@@ -60,6 +59,11 @@ class BaseAgent(ABC):
         self.skills = skills
         self.app = FastAPI(title=name)
 
+        # Configure agent-specific logging
+        self.logger = configure_agent_logging(name, include_console=True)
+        self.logger.info(f"Initializing {name} agent on port {port}")
+        self.logger.debug(f"Provided skills: {[s.id for s in skills]}")
+
         # Setup routes
         self._setup_routes()
 
@@ -86,16 +90,25 @@ class BaseAgent(ABC):
         @self.app.post("/execute")
         async def execute(message: Message):
             """Execute a skill."""
+            start_time = time.time()
+            skill_id = message.method
+            self.logger.info(f"Received request to execute skill: {skill_id}")
+            self.logger.debug(f"Request ID: {message.id}, Params: {message.params}")
+
             try:
                 # Validate method is a known skill
                 skill_ids = [skill.id for skill in self.skills]
-                if message.method not in skill_ids:
+                if skill_id not in skill_ids:
+                    self.logger.warning(f"Unknown skill requested: {skill_id}")
                     raise HTTPException(
-                        status_code=404, detail=f"Unknown skill: {message.method}"
+                        status_code=404, detail=f"Unknown skill: {skill_id}"
                     )
 
                 # Execute the skill
-                result = await self.execute_skill(message.method, message.params)
+                self.logger.debug(f"Executing skill: {skill_id}")
+                result = await self.execute_skill(skill_id, message.params)
+                elapsed = time.time() - start_time
+                self.logger.info(f"Skill {skill_id} completed in {elapsed:.2f}s")
 
                 # Return JSON-RPC 2.0 response
                 return {
@@ -104,7 +117,10 @@ class BaseAgent(ABC):
                     "id": message.id,
                 }
             except Exception as e:
-                logger.error(f"Error executing skill: {e}")
+                elapsed = time.time() - start_time
+                self.logger.error(
+                    f"Skill {skill_id} failed after {elapsed:.2f}s: {e}", exc_info=True
+                )
                 return {
                     "jsonrpc": "2.0",
                     "error": {
@@ -137,8 +153,10 @@ class BaseAgent(ABC):
         Returns:
             Claude's response
         """
+        start_time = time.time()
         # Combine system prompt and user message into a single prompt
         combined_prompt = f"{system_prompt}\n\n{user_message}"
+        self.logger.debug(f"Calling Claude API (prompt length: {len(combined_prompt)})")
 
         try:
             # Use asyncio to run subprocess without blocking
@@ -152,18 +170,33 @@ class BaseAgent(ABC):
             )
 
             stdout, stderr = await process.communicate()
+            elapsed = time.time() - start_time
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
+                self.logger.error(
+                    f"Claude API call failed after {elapsed:.2f}s: {error_msg}"
+                )
                 raise RuntimeError(f"Claude code CLI failed: {error_msg}")
 
-            return stdout.decode().strip()
+            response = stdout.decode().strip()
+            self.logger.debug(
+                f"Claude API call completed in {elapsed:.2f}s "
+                f"(response length: {len(response)})"
+            )
+            return response
+
         except FileNotFoundError:
+            self.logger.error("Claude CLI not found in PATH")
             raise RuntimeError(
                 "Claude code CLI not found. "
                 "Make sure 'claude' is installed and in PATH."
             )
         except Exception as e:
+            elapsed = time.time() - start_time
+            self.logger.error(
+                f"Claude API call failed after {elapsed:.2f}s: {e}", exc_info=True
+            )
             raise RuntimeError(f"Error calling Claude code CLI: {e}")
 
     async def call_agent_skill(

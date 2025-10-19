@@ -13,6 +13,11 @@ import asyncio
 import json
 from pathlib import Path
 from src.orchestrator import execute_workflow_by_id
+from src.logging_config import setup_all_logging, get_pallet_logger
+
+# Initialize logging system
+setup_all_logging()
+logger = get_pallet_logger()
 
 
 def save_results(results: dict, output_dir: Path = Path("app")):
