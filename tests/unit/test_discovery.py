@@ -399,16 +399,17 @@ class TestDiscoverWorkflow:
             "src.workflow_registry.pull_workflow_from_registry",
             return_value=Path("/tmp/workflow.yaml"),
         ):
-            with patch(
-                "src.workflow_engine.load_workflow_from_yaml",
-                return_value=mock_workflow,
-            ):
-                # Clear cache first
-                clear_workflow_cache()
-                workflow = await discover_workflow("test-workflow", "v1")
+            with patch.object(Path, "read_text", return_value="yaml content"):
+                with patch(
+                    "src.workflow_engine.load_workflow_from_yaml",
+                    return_value=mock_workflow,
+                ):
+                    # Clear cache first
+                    clear_workflow_cache()
+                    workflow = await discover_workflow("test-workflow", "v1")
 
-                assert workflow is not None
-                assert workflow.metadata.name == "Test Workflow"
+                    assert workflow is not None
+                    assert workflow.metadata.name == "Test Workflow"
 
     async def test_discover_workflow_caching(self):
         """Test workflow caching."""
@@ -422,15 +423,16 @@ class TestDiscoverWorkflow:
             "src.workflow_registry.pull_workflow_from_registry",
             return_value=Path("/tmp/workflow.yaml"),
         ) as mock_pull:
-            with patch(
-                "src.workflow_engine.load_workflow_from_yaml",
-                return_value=mock_workflow,
-            ):
-                workflow1 = await discover_workflow("test-workflow", "v1")
-                workflow2 = await discover_workflow("test-workflow", "v1")
+            with patch.object(Path, "read_text", return_value="yaml content"):
+                with patch(
+                    "src.workflow_engine.load_workflow_from_yaml",
+                    return_value=mock_workflow,
+                ):
+                    workflow1 = await discover_workflow("test-workflow", "v1")
+                    workflow2 = await discover_workflow("test-workflow", "v1")
 
-                assert workflow1 is workflow2
-                mock_pull.assert_called_once()  # Only called once due to caching
+                    assert workflow1 is workflow2
+                    mock_pull.assert_called_once()  # Only called once due to caching
 
     async def test_discover_workflow_not_found(self):
         """Test workflow not found."""
@@ -453,13 +455,14 @@ class TestDiscoverWorkflow:
             "src.workflow_registry.pull_workflow_from_registry",
             return_value=Path("/tmp/workflow.yaml"),
         ):
-            with patch(
-                "src.workflow_engine.load_workflow_from_yaml",
-                side_effect=Exception("Invalid YAML"),
-            ):
-                workflow = await discover_workflow("test-workflow", "v1")
+            with patch.object(Path, "read_text", return_value="yaml content"):
+                with patch(
+                    "src.workflow_engine.load_workflow_from_yaml",
+                    side_effect=Exception("Invalid YAML"),
+                ):
+                    workflow = await discover_workflow("test-workflow", "v1")
 
-                assert workflow is None
+                    assert workflow is None
 
     async def test_clear_workflow_cache(self):
         """Test cache clearing."""
@@ -495,17 +498,18 @@ class TestDiscoverWorkflow:
         clear_workflow_cache()
 
         with patch("src.workflow_registry.pull_workflow_from_registry") as mock_pull:
-            with patch("src.workflow_engine.load_workflow_from_yaml") as mock_load:
-                # Setup different returns for different versions
-                mock_pull.side_effect = [
-                    Path("/tmp/workflow_v1.yaml"),
-                    Path("/tmp/workflow_v2.yaml"),
-                ]
-                mock_load.side_effect = [mock_workflow_v1, mock_workflow_v2]
+            with patch.object(Path, "read_text", return_value="yaml content"):
+                with patch("src.workflow_engine.load_workflow_from_yaml") as mock_load:
+                    # Setup different returns for different versions
+                    mock_pull.side_effect = [
+                        Path("/tmp/workflow_v1.yaml"),
+                        Path("/tmp/workflow_v2.yaml"),
+                    ]
+                    mock_load.side_effect = [mock_workflow_v1, mock_workflow_v2]
 
-                workflow_v1 = await discover_workflow("test-workflow", "v1")
-                workflow_v2 = await discover_workflow("test-workflow", "v2")
+                    workflow_v1 = await discover_workflow("test-workflow", "v1")
+                    workflow_v2 = await discover_workflow("test-workflow", "v2")
 
-                assert workflow_v1.metadata.name == "Test Workflow v1"
-                assert workflow_v2.metadata.name == "Test Workflow v2"
-                assert mock_pull.call_count == 2
+                    assert workflow_v1.metadata.name == "Test Workflow v1"
+                    assert workflow_v2.metadata.name == "Test Workflow v2"
+                    assert mock_pull.call_count == 2

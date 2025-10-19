@@ -16,7 +16,7 @@ import httpx
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from src.discovery import discover_agent
 from src.logging_config import configure_module_logging
@@ -145,12 +145,16 @@ class WorkflowContext:
         return resolved
 
 
-def load_workflow_from_yaml(yaml_content: Union[str, Path]) -> WorkflowDefinition:
+def load_workflow_from_yaml(yaml_content: str) -> WorkflowDefinition:
     """
-    Load and validate a workflow from YAML content or file path.
+    Load and validate a workflow from YAML string content.
+
+    This function parses YAML string content into a WorkflowDefinition object.
+    For runtime usage, workflows should be discovered via discover_workflow()
+    which pulls from the registry and passes the YAML content here.
 
     Args:
-        yaml_content: YAML string or path to YAML file
+        yaml_content: YAML string content (not a file path)
 
     Returns:
         Validated WorkflowDefinition object
@@ -158,19 +162,16 @@ def load_workflow_from_yaml(yaml_content: Union[str, Path]) -> WorkflowDefinitio
     Raises:
         yaml.YAMLError: If YAML is malformed
         pydantic.ValidationError: If workflow structure is invalid
-    """
-    if isinstance(yaml_content, Path) or (
-        isinstance(yaml_content, str)
-        and "\n" not in yaml_content
-        and len(yaml_content) < 255
-    ):
-        # Treat as file path
-        with open(yaml_content, "r") as f:
-            data = yaml.safe_load(f)
-    else:
-        # Treat as YAML string
-        data = yaml.safe_load(yaml_content)
 
+    Example:
+        # Runtime: Pull from registry, then load
+        workflow = await discover_workflow("code-generation-v1")
+
+        # Or manually:
+        yaml_str = Path("workflows/example.yaml").read_text()
+        workflow = load_workflow_from_yaml(yaml_str)
+    """
+    data = yaml.safe_load(yaml_content)
     return WorkflowDefinition(**data)
 
 

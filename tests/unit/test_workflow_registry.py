@@ -187,9 +187,11 @@ class TestListWorkflows:
 class TestGetWorkflowMetadata:
     @patch("src.workflow_registry.pull_workflow_from_registry")
     @patch("src.workflow_engine.load_workflow_from_yaml")
-    def test_get_metadata_success(self, mock_load, mock_pull):
+    @patch("pathlib.Path.read_text")
+    def test_get_metadata_success(self, mock_read_text, mock_load, mock_pull):
         """Test getting workflow metadata."""
         mock_pull.return_value = Path("/tmp/workflow.yaml")
+        mock_read_text.return_value = "yaml content"
 
         mock_workflow = MagicMock()
         mock_workflow.metadata.id = "test-workflow"
