@@ -2,7 +2,7 @@
 # How to run:
 #   uv run python -m tests.runners.util_registry
 
-from src.utils.registry import Registry
+from src.registry.client import Registry
 
 class TestRegistryIsAlive:
     def test_is_alive_success_200(self):
