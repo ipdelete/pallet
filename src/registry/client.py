@@ -12,7 +12,7 @@ class Registry:
         except RequestException as e:
             return False
     
-    def list_all_repositories(self):
+    def list_repositories(self):
         try:
             response = requests.get(f"{self.url}/v2/_catalog/")
             if response.status_code == 200:
@@ -21,7 +21,7 @@ class Registry:
         except RequestException as e:
             return None
     
-    def list_all_tags(self, repo):
+    def list_tags(self, repo):
         try:
             print(f"{self.url}/v2/{repo}/tags/list")
             response = requests.get(f"{self.url}/v2/{repo}/tags/list")
@@ -32,7 +32,7 @@ class Registry:
             print("tag requested, error returned")
             return None
         
-    def get_manifest_for_repo(self, repo, tag):
+    def get_manifest(self, repo, tag):
         try:
             headers = {
                 'Accept': 'application/vnd.oci.image.manifest.v1+json'
