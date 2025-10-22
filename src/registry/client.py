@@ -5,6 +5,9 @@ from pydantic import ValidationError
 from .models import ManifestResponse, RegistryConfig, CatalogResponse, TagsResponse
 from .exceptions import RegistryConnectionError, RegistryValidationError
 import logging
+import json
+import hashlib
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +145,118 @@ class Registry:
             logger.error(f"Failed to get blob {digest}: {e}")
             raise RegistryConnectionError(f"Blob fetch failed: {e}")
         
+    def upload_blob(self, repo: str, content: bytes, digest: str):
+        """Upload blob using monolithic upload. Should be less than 4mb"""
+        # Step 1: Initiate upload
+        initiate_url = f"{self.url}/v2/{repo}/blobs/uploads/"
+        
+        try:
+            # Initiate the upload
+            initiate_response = self._session.post(initiate_url)
+            
+            if initiate_response.status_code != 202:
+                raise RequestException(f"Blob upload initiation failed: {initiate_response.status_code} - {initiate_response.text}")
+            
+            # Get the upload location from the response
+            upload_location = initiate_response.headers.get("Location")
+            if not upload_location:
+                raise RequestException("No Location header in upload initiation response")
+            
+            # Make location absolute if it's relative
+            if upload_location.startswith("/"):
+                upload_location = f"{self.url}{upload_location}"
+            
+            # Step 2: Complete the monolithic upload with digest
+            upload_url = f"{upload_location}&digest={digest}"
+            upload_response = self._session.put(
+                upload_url,
+                data=content,
+                headers={
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": str(len(content))
+                }
+            )
+            
+            if upload_response.status_code != 201:
+                raise RequestException(f"Blob upload failed: {upload_response.status_code} - {upload_response.text}")
+                
+        except RequestException as e:
+            logger.error(f"Failed to upload blob {digest}: {e}")
+            raise RegistryConnectionError(f'Blob upload failed: {e}')
+    
+    def _calculate_digest(self, content: bytes) -> str:
+        """Calculate SHA256 digest for content"""
+        return f"sha256:{hashlib.sha256(content).hexdigest()}"
+    
+    def push_manifest(
+        self,
+        repo: str,
+        tag: str,
+        filename: str,
+        blob_digest: str,
+        size: int
+    ) -> str:
+        """
+        Create and push OCI manifest
+        
+        Args:
+            repo: Repository name
+            tag: Tag/version identifier
+            filename: Original filename for annotations
+            blob_digest: Digest of the blob content
+            size: Size of the blob in bytes
+            
+        Returns:
+            Manifest digest string
+        """
+        try:
+            # Create manifest
+            manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "config": {
+                    "mediaType": "application/vnd.pallet.workflow.v1+yaml",
+                    "digest": blob_digest,
+                    "size": size,
+                    "annotations": {
+                        "org.opencontainers.image.title": filename,
+                        "org.pallet.workflow.type": "sequential"
+                    }
+                },
+                "layers": [{
+                    "mediaType": "application/vnd.pallet.workflow.v1+yaml",
+                    "digest": blob_digest,
+                    "size": size
+                }],
+                "annotations": {
+                    "org.opencontainers.image.created": 
+                        datetime.utcnow().isoformat() + "Z"
+                }
+            }
+            
+            # Upload manifest
+            manifest_json = json.dumps(manifest, separators=(',', ':'))
+            manifest_digest = self._calculate_digest(manifest_json.encode())
+            
+            url = f"{self.url}/v2/{repo}/manifests/{tag}"
+            logger.debug(f"Pushing manifest to: {url}")
+            
+            response = self._session.put(
+                url,
+                data=manifest_json,
+                headers={
+                    "Content-Type": "application/vnd.oci.image.manifest.v1+json"
+                },
+                timeout=self.config.timeout
+            )
+            response.raise_for_status()
+            
+            return manifest_digest
+            
+        except RequestException as e:
+            logger.error(f"Failed to push manifest {repo}:{tag}: {e}")
+            raise RegistryConnectionError(f"Manifest upload failed: {e}")
+    
     def close(self):
         """Close the underlying session"""
         self._session.close()
