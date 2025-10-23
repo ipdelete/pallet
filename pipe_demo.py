@@ -18,8 +18,6 @@ async def demo_with_pipe():
     )
     
     stdout, stderr = await process.communicate()
-    stdout = stdout.decode()
-    stdout = stdout.strip()
     
     print(f"Captured stdout: {stdout.decode().strip()}")
     print(f"Captured stderr: {stderr.decode().strip()}")
