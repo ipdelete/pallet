@@ -7,7 +7,7 @@ from .exceptions import RegistryConnectionError, RegistryValidationError
 import logging
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ class Registry:
                 }],
                 "annotations": {
                     "org.opencontainers.image.created": 
-                        datetime.utcnow().isoformat() + "Z"
+                        datetime.now(timezone.utc).isoformat() + "Z"
                 }
             }
             
