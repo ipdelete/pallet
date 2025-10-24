@@ -26,7 +26,7 @@ NC='\033[0m' # No Color
 # Configuration
 REGISTRY_URL="localhost:5000"
 REGISTRY_NAMESPACE="agents"
-PALLET_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PALLET_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 AGENT_CARDS_DIR="$PALLET_ROOT/src/agent_cards"
 SCRIPTS_DIR="$PALLET_ROOT/scripts"
 LOG_DIR="$PALLET_ROOT/logs"
@@ -186,7 +186,7 @@ publish_agent_cards() {
     # Change to agent_cards directory to use relative paths
     cd "$AGENT_CARDS_DIR"
 
-    for agent in "${!AGENTS[@]}"; do
+    for agent in ${(k)AGENTS}; do
         local card_filename="${agent}_agent_card.json"
         local registry_path="$REGISTRY_URL/$REGISTRY_NAMESPACE/$agent:v1"
 
@@ -198,7 +198,7 @@ publish_agent_cards() {
         log_info "Publishing ${agent} agent card..."
 
         # Push agent card to registry using ORAS with relative path
-        if oras push "$registry_path" "$card_filename:application/json" > /tmp/oras_push.log 2>&1; then
+        if oras push --disable-path-validation "$registry_path" "${card_filename}:application/json" > /tmp/oras_push.log 2>&1; then
             log_success "${agent} agent card published"
         else
             log_error "Failed to publish ${agent} agent card"
@@ -243,7 +243,7 @@ start_agents() {
 
     cd "$PALLET_ROOT"
 
-    for agent in "${!AGENTS[@]}"; do
+    for agent in ${(k)AGENTS}; do
         local port=${AGENTS[$agent]}
         local log_file="$LOG_DIR/${agent}_agent.log"
 
@@ -295,7 +295,7 @@ verify_setup() {
     log_success "Registry is running"
 
     # Check agents
-    for agent in "${!AGENTS[@]}"; do
+    for agent in ${(k)AGENTS}; do
         local port=${AGENTS[$agent]}
 
         if ! check_port "$port"; then

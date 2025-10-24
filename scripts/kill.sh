@@ -22,7 +22,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-PALLET_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PALLET_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 APP_DIR="$PALLET_ROOT/app"
 LOG_DIR="$PALLET_ROOT/logs"
 REGISTRY_CONTAINER="local-registry"
@@ -201,14 +201,33 @@ clear_logs() {
         return
     fi
 
-    local log_count=$(find "$LOG_DIR" -type f 2>/dev/null | wc -l)
+    local items_removed=0
 
-    if [ "$log_count" -gt 0 ]; then
-        log_info "Removing $log_count log file(s) from $LOG_DIR..."
-        rm -rf "$LOG_DIR"/*
-        log_success "Logs cleared"
+    # Remove top-level .log files
+    local log_files=$(find "$LOG_DIR" -maxdepth 1 -type f -name "*.log" 2>/dev/null)
+    if [ -n "$log_files" ]; then
+        find "$LOG_DIR" -maxdepth 1 -type f -name "*.log" -delete
+        items_removed=$((items_removed + $(echo "$log_files" | wc -l)))
+    fi
+
+    # Remove agents/ directory and its contents
+    if [ -d "$LOG_DIR/agents" ]; then
+        rm -rf "$LOG_DIR/agents"
+        log_info "Removed logs/agents/"
+        items_removed=$((items_removed + 1))
+    fi
+
+    # Remove pallet/ directory and its contents
+    if [ -d "$LOG_DIR/pallet" ]; then
+        rm -rf "$LOG_DIR/pallet"
+        log_info "Removed logs/pallet/"
+        items_removed=$((items_removed + 1))
+    fi
+
+    if [ "$items_removed" -gt 0 ]; then
+        log_success "Logs cleared (prompts/ preserved)"
     else
-        log_warning "Log folder is already empty"
+        log_warning "No logs to clear"
     fi
 
     echo ""
