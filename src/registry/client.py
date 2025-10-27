@@ -148,9 +148,12 @@ class Registry:
             initiate_response = self._session.post(initiate_url)
 
             if initiate_response.status_code != 202:
-                raise RequestException(
-                    f"Blob upload initiation failed: {initiate_response.status_code} - {initiate_response.text}"
+                msg = (
+                    f"Blob upload initiation failed: "
+                    f"{initiate_response.status_code} - "
+                    f"{initiate_response.text}"
                 )
+                raise RequestException(msg)
 
             # Get the upload location from the response
             upload_location = initiate_response.headers.get("Location")
@@ -175,9 +178,12 @@ class Registry:
             )
 
             if upload_response.status_code != 201:
-                raise RequestException(
-                    f"Blob upload failed: {upload_response.status_code} - {upload_response.text}"
+                msg = (
+                    f"Blob upload failed: "
+                    f"{upload_response.status_code} - "
+                    f"{upload_response.text}"
                 )
+                raise RequestException(msg)
 
         except RequestException as e:
             logger.error(f"Failed to upload blob {digest}: {e}")

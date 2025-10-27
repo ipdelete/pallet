@@ -186,7 +186,7 @@ publish_agent_cards() {
     # Change to agent_cards directory to use relative paths
     cd "$AGENT_CARDS_DIR"
 
-    for agent in ${(k)AGENTS}; do
+    for agent in "${!AGENTS[@]}"; do
         local card_filename="${agent}_agent_card.json"
         local registry_path="$REGISTRY_URL/$REGISTRY_NAMESPACE/$agent:v1"
 
@@ -243,7 +243,7 @@ start_agents() {
 
     cd "$PALLET_ROOT"
 
-    for agent in ${(k)AGENTS}; do
+    for agent in "${!AGENTS[@]}"; do
         local port=${AGENTS[$agent]}
         local log_file="$LOG_DIR/${agent}_agent.log"
 
@@ -295,7 +295,7 @@ verify_setup() {
     log_success "Registry is running"
 
     # Check agents
-    for agent in ${(k)AGENTS}; do
+    for agent in "${!AGENTS[@]}"; do
         local port=${AGENTS[$agent]}
 
         if ! check_port "$port"; then

@@ -164,7 +164,9 @@ def load_workflow_from_yaml(yaml_content: str) -> WorkflowDefinition:
 
     Example:
         # Runtime: Pull from registry, then load (inside an async function)
-        workflow = await discover_workflow("code-generation-v1")  # inside an async function
+        workflow = await discover_workflow(
+            "code-generation-v1"
+        )  # inside an async function
 
         # Or manually:
         yaml_str = open("workflows/example.yaml").read()
