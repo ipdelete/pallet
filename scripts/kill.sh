@@ -29,6 +29,8 @@ REGISTRY_CONTAINER="local-registry"
 
 # Flags
 CLEAN_LOGS=false
+CLEAN_KIND=false
+CLEAN_PVC=false
 
 #######################################################################
 # Helper Functions
@@ -61,6 +63,14 @@ parse_args() {
                 CLEAN_LOGS=true
                 shift
                 ;;
+            --kind)
+                CLEAN_KIND=true
+                shift
+                ;;
+            --clean-pvc)
+                CLEAN_PVC=true
+                shift
+                ;;
             --help)
                 show_help
                 exit 0
@@ -79,12 +89,15 @@ show_help() {
 Usage: bash scripts/kill.sh [OPTIONS]
 
 Options:
-  --clean-logs    Also remove all agent logs
+  --kind          Delete kind cluster (pallet-dev)
+  --clean-logs    Remove all agent logs and app outputs
+  --clean-pvc     Delete Persistent Volume Claim data
   --help          Show this help message
 
 Examples:
-  bash scripts/kill.sh              # Stop everything, keep logs
-  bash scripts/kill.sh --clean-logs # Stop everything and remove logs
+  bash scripts/kill.sh                             # Stop agents only
+  bash scripts/kill.sh --kind --clean-logs         # K8s: delete cluster, clean logs
+  bash scripts/kill.sh --clean-logs --clean-pvc    # Full cleanup including PVC data
 
 EOF
 }
@@ -112,6 +125,47 @@ kill_agents() {
         log_warning "No agents were running"
     else
         log_success "$killed agent(s) stopped"
+    fi
+
+    echo ""
+}
+
+#######################################################################
+# Kill Kind Cluster
+#######################################################################
+
+kill_kind_cluster() {
+    if [ "$CLEAN_KIND" = false ]; then
+        return
+    fi
+
+    log_info "Cleaning up kind cluster..."
+
+    # Check if kind is installed
+    if ! command -v kind &> /dev/null; then
+        log_warning "kind is not installed, skipping cluster cleanup"
+        echo ""
+        return
+    fi
+
+    # Check if cluster exists
+    if kind get clusters 2>/dev/null | grep -q "^pallet-dev\$"; then
+        log_info "Deleting kind cluster 'pallet-dev'..."
+
+        if kind delete cluster --name pallet-dev; then
+            log_success "Kind cluster deleted"
+        else
+            log_error "Failed to delete kind cluster"
+            echo ""
+            return 1
+        fi
+
+        # Optionally delete PVC data
+        if [ "$CLEAN_PVC" = true ]; then
+            log_info "PVC data was part of the cluster and is now removed"
+        fi
+    else
+        log_warning "Kind cluster 'pallet-dev' not found"
     fi
 
     echo ""
@@ -248,6 +302,7 @@ main() {
 EOF
 
     kill_agents
+    kill_kind_cluster
     kill_registry
     clear_app_folder
     clear_logs
@@ -260,7 +315,8 @@ EOF
 All systems stopped and cleaned up.
 
 To restart the system:
-  bash scripts/bootstrap.sh
+  bash scripts/bootstrap-k8s.sh  # Kubernetes-based (recommended)
+  bash scripts/bootstrap.sh      # Docker-only (fallback)
 
 EOF
 }

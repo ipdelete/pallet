@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pallet Registry Helm Chart Values Schema",
+  "description": "Input schema for charts/pallet-registry/values.yaml",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "description": "Container image configuration",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Docker image repository",
+          "default": "registry"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Docker image tag",
+          "default": "2.8.3"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"],
+          "description": "Image pull policy",
+          "default": "IfNotPresent"
+        }
+      },
+      "required": ["repository", "tag"]
+    },
+    "replicaCount": {
+      "type": "integer",
+      "description": "Number of registry pod replicas",
+      "minimum": 1,
+      "default": 1
+    },
+    "service": {
+      "type": "object",
+      "description": "Kubernetes Service configuration",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"],
+          "description": "Service type",
+          "default": "NodePort"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Service port",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 5000
+        },
+        "nodePort": {
+          "type": "integer",
+          "description": "NodePort for external access (required if type=NodePort)",
+          "minimum": 30000,
+          "maximum": 32767,
+          "default": 5000
+        }
+      },
+      "required": ["type", "port"]
+    },
+    "persistence": {
+      "type": "object",
+      "description": "Persistent storage configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable persistent volume",
+          "default": true
+        },
+        "size": {
+          "type": "string",
+          "description": "PVC size (K8s quantity format)",
+          "pattern": "^[0-9]+(Mi|Gi|Ti|Ki)$",
+          "default": "1Gi"
+        },
+        "storageClassName": {
+          "type": ["string", "null"],
+          "description": "Storage class name (null = use default)",
+          "default": null
+        },
+        "mountPath": {
+          "type": "string",
+          "description": "Mount path in container",
+          "default": "/var/lib/registry"
+        }
+      },
+      "required": ["enabled"]
+    },
+    "resources": {
+      "type": "object",
+      "description": "Container resource requests and limits",
+      "properties": {
+        "limits": {
+          "type": "object",
+          "description": "Resource limits",
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "description": "CPU limit",
+              "default": "500m"
+            },
+            "memory": {
+              "type": "string",
+              "description": "Memory limit",
+              "default": "256Mi"
+            }
+          }
+        },
+        "requests": {
+          "type": "object",
+          "description": "Resource requests",
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "description": "CPU request",
+              "default": "100m"
+            },
+            "memory": {
+              "type": "string",
+              "description": "Memory request",
+              "default": "128Mi"
+            }
+          }
+        }
+      }
+    },
+    "livenessProbe": {
+      "type": "object",
+      "description": "Liveness probe configuration",
+      "properties": {
+        "httpGet": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/v2/"
+            },
+            "port": {
+              "type": "integer",
+              "default": 5000
+            }
+          }
+        },
+        "initialDelaySeconds": {
+          "type": "integer",
+          "default": 10
+        },
+        "periodSeconds": {
+          "type": "integer",
+          "default": 10
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "default": 5
+        }
+      }
+    },
+    "readinessProbe": {
+      "type": "object",
+      "description": "Readiness probe configuration",
+      "properties": {
+        "httpGet": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/v2/"
+            },
+            "port": {
+              "type": "integer",
+              "default": 5000
+            }
+          }
+        },
+        "initialDelaySeconds": {
+          "type": "integer",
+          "default": 5
+        },
+        "periodSeconds": {
+          "type": "integer",
+          "default": 5
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "default": 3
+        }
+      }
+    }
+  },
+  "required": ["image", "service"],
+  "additionalProperties": true,
+  "examples": [
+    {
+      "description": "Development environment values",
+      "values": {
+        "image": {
+          "repository": "registry",
+          "tag": "2.8.3",
+          "pullPolicy": "IfNotPresent"
+        },
+        "replicaCount": 1,
+        "service": {
+          "type": "NodePort",
+          "port": 5000,
+          "nodePort": 5000
+        },
+        "persistence": {
+          "enabled": true,
+          "size": "1Gi",
+          "storageClassName": null,
+          "mountPath": "/var/lib/registry"
+        },
+        "resources": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        }
+      }
+    }
+  ]
+}

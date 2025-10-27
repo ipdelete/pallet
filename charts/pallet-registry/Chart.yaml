@@ -1,0 +1,12 @@
+apiVersion: v2
+name: pallet-registry
+description: Pallet OCI Registry Helm Chart
+type: application
+version: 1.0.0
+appVersion: "2.8.3"
+keywords:
+  - registry
+  - oci
+  - pallet
+maintainers:
+  - name: Pallet Team

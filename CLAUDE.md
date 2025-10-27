@@ -191,3 +191,10 @@ uv run invoke test.coverage     # All coverage formats
 | Stale state | `bash scripts/kill.sh --clean-logs` before bootstrap |
 | Remove Docker image | `docker rmi registry:2` |
 - use zsh when on a mac
+
+## Active Technologies
+- Bash 5.0+, Python 3.12+ (for orchestration) + kind (Kubernetes in Docker), Helm 3.0+, docker, kubectl, oras (for registry interaction) (001-dev-env)
+- OCI Registry v2 (deployed in Kubernetes), persisted via PVC (001-dev-env)
+
+## Recent Changes
+- 001-dev-env: Added Bash 5.0+, Python 3.12+ (for orchestration) + kind (Kubernetes in Docker), Helm 3.0+, docker, kubectl, oras (for registry interaction)
