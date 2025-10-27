@@ -43,6 +43,7 @@ cleanup() {
     if [ $exit_code -ne 0 ]; then
         log_error "Bootstrap failed with exit code $exit_code"
     fi
+    # Keep port-forward alive, but cleanup will be handled by kill.sh
     return $exit_code
 }
 
@@ -141,7 +142,7 @@ while [ $attempt -lt $max_attempts ]; do
     if [ $((pod_count - 1)) -gt 0 ]; then
         # Pod exists, check if it's ready
         ready=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/instance="$RELEASE_NAME" \
-            -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+            -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null) || true
 
         if [ "$ready" = "True" ]; then
             log_success "Registry pod is ready"
@@ -151,7 +152,7 @@ while [ $attempt -lt $max_attempts ]; do
 
     log_info "  Waiting for pod ready... (${attempt}/${max_attempts})"
     sleep 1
-    ((attempt++))
+    ((attempt++)) || true
 done
 
 if [ $attempt -eq $max_attempts ]; then
@@ -159,7 +160,24 @@ if [ $attempt -eq $max_attempts ]; then
 fi
 
 # ============================================================================
-# Step 8: Verify registry connectivity
+# Step 8: Setup port forwarding in background
+# ============================================================================
+
+log_info "Setting up port forwarding from localhost:5000 to NodePort 30500..."
+
+# Kill any existing port-forward processes
+pkill -f "kubectl port-forward" 2>/dev/null || true
+sleep 1
+
+# Start port forwarding in background and save the PID
+nohup kubectl port-forward -n "$NAMESPACE" svc/registry-pallet-registry 5000:5000 > /tmp/port-forward.log 2>&1 &
+PORT_FORWARD_PID=$!
+sleep 3
+
+log_success "Port forwarding started (PID: $PORT_FORWARD_PID)"
+
+# ============================================================================
+# Step 9: Verify registry connectivity
 # ============================================================================
 
 log_info "Verifying registry connectivity..."

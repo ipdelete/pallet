@@ -17,7 +17,7 @@ if ! command -v kind &> /dev/null; then
     exit 1
 fi
 
-KIND_VERSION=$(kind version | grep -oP 'kind v\K[0-9.]+')
+KIND_VERSION=$(kind version | sed -n 's/.*kind v\([0-9.]*\).*/\1/p')
 echo -e "${GREEN}✓ kind v${KIND_VERSION}${NC}"
 
 # Check helm
@@ -27,7 +27,7 @@ if ! command -v helm &> /dev/null; then
     exit 1
 fi
 
-HELM_VERSION=$(helm version --short | grep -oP 'v\K[0-9.]+')
+HELM_VERSION=$(helm version --short | sed -n 's/.*v\([0-9.]*\).*/\1/p')
 echo -e "${GREEN}✓ helm v${HELM_VERSION}${NC}"
 
 # Check kubectl
@@ -37,7 +37,7 @@ if ! command -v kubectl &> /dev/null; then
     exit 1
 fi
 
-KUBECTL_VERSION=$(kubectl version --client --short 2>/dev/null | grep -oP 'v\K[0-9.]+')
+KUBECTL_VERSION=$(kubectl version --client 2>/dev/null | grep "Client Version" | sed -n 's/.*v\([0-9.]*\).*/\1/p')
 echo -e "${GREEN}✓ kubectl v${KUBECTL_VERSION}${NC}"
 
 # Check docker
@@ -47,7 +47,7 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-DOCKER_VERSION=$(docker --version | grep -oP 'version \K[0-9.]+')
+DOCKER_VERSION=$(docker --version | sed -n 's/.*version \([0-9.]*\).*/\1/p')
 echo -e "${GREEN}✓ docker v${DOCKER_VERSION}${NC}"
 
 # Check Docker daemon
