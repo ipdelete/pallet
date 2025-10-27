@@ -58,6 +58,27 @@ Example workflows:
 
 See [docs/WORKFLOW_ENGINE.md](docs/WORKFLOW_ENGINE.md) for full documentation.
 
+### Prerequisites
+
+**Required (all platforms)**:
+- Python 3.12+
+- Docker Desktop or Docker daemon running
+- `claude` CLI: `npm install -g @anthropic-ai/claude-cli`
+- `ANTHROPIC_API_KEY` environment variable
+
+**Optional (for Kubernetes-based setup)**:
+- kind 0.20+
+- Helm 3.12+
+- kubectl 1.27+
+
+**Installation** (macOS):
+```bash
+# Using Homebrew
+brew install kind helm kubectl
+```
+
+See [specs/001-dev-env/quickstart.md](specs/001-dev-env/quickstart.md) for full setup guide.
+
 ### Quick Start
 
 **1. Setup:**
@@ -67,11 +88,18 @@ npm install -g @anthropic-ai/claude-cli
 export ANTHROPIC_API_KEY="your-api-key-here"
 ```
 
-**2. Bootstrap** (auto-configures everything):
+**2. Bootstrap** (choose one):
+
+**Option A: Kubernetes-based (recommended)** - Requires kind/Helm:
 ```bash
-bash scripts/bootstrap.sh
+bash scripts/bootstrap-k8s.sh    # Creates kind cluster + Helm registry deployment
+bash scripts/verify-bootstrap.sh # Verify all services operational
 ```
-Starts registry (5000), agents (8001-8003), verifies services
+
+**Option B: Docker-only (fallback)** - No additional tools needed:
+```bash
+bash scripts/bootstrap.sh        # Original Docker container setup
+```
 
 **3. Run orchestrator:**
 ```bash
@@ -81,10 +109,23 @@ uv run python main.py "Create a function that validates email" # Custom
 Outputs: `app/main.py`, `app/plan.json`, `app/review.json`, `app/metadata.json`
 
 **4. Tear down:**
+
+For Kubernetes-based setup:
 ```bash
-bash scripts/kill.sh --clean-logs  # Stop all services, clear logs
-docker rmi registry:2              # Optional: remove Docker image
+bash scripts/kill.sh --kind --clean-logs          # Delete cluster, clean logs/artifacts
+bash scripts/kill.sh --kind --clean-logs --clean-pvc  # Also delete PVC data
 ```
+
+For Docker-based setup:
+```bash
+bash scripts/kill.sh --clean-logs                 # Stop containers, clean logs
+docker rmi registry:2                             # Optional: remove Docker image
+```
+
+**Cleanup options**:
+- `--kind`: Delete kind cluster (pallet-dev) - use with K8s-based bootstrap
+- `--clean-logs`: Remove logs/ and app/ directories
+- `--clean-pvc`: Delete Persistent Volume Claim data (K8s only)
 
 ### How Discovery Works
 
@@ -166,17 +207,69 @@ uv run invoke lint.black-check  # Check formatting
 uv run invoke lint.flake8       # Style check
 ```
 
-**Testing** (151 tests, 87% coverage):
+**Testing**:
 ```bash
-uv run invoke test              # All (default: skips slow/e2e)
-uv run invoke test.unit         # Unit only
-uv run invoke test.integration  # Integration only
-uv run invoke test.api          # API endpoints only
-uv run invoke test.coverage     # All coverage formats (HTML, terminal, XML)
-uv run invoke test.debug        # Drop to pdb on failure
+uv run invoke test                      # All tests (default: skips slow/e2e)
+uv run invoke test.unit                 # Unit tests only
+uv run invoke test.integration          # Integration tests only
+uv run invoke test.api                  # API endpoint tests only
+uv run invoke test.verbose              # All tests with verbose output
+uv run invoke test.coverage             # All coverage formats (HTML, terminal, XML)
+uv run invoke test.debug                # Drop to pdb on test failure
+```
+
+**Code Quality**:
+```bash
+uv run invoke lint.black                # Format code with Black
+uv run invoke lint.black-check          # Check if formatting is needed
+uv run invoke lint.flake8               # Check code style with Flake8
 ```
 
 See [tests/README.md](tests/README.md) for full invoke tasks reference.
+
+### Troubleshooting
+
+**Setup Issues**:
+
+| Issue | Solution |
+|-------|----------|
+| `kind: command not found` | Install kind: `brew install kind` (macOS) or see https://kind.sigs.k8s.io/docs/user/quick-start/ |
+| `helm: command not found` | Install helm: `brew install helm` (macOS) or see https://helm.sh/docs/intro/install/ |
+| `Docker daemon not running` | Start Docker Desktop or `dockerd` |
+| `Port 5000 already in use` | Run `lsof -i :5000` to find process, then `kill <PID>` or choose different port |
+| `kind cluster not deleting` | Run `kind delete cluster --name pallet-dev` manually |
+
+**Runtime Issues**:
+
+| Issue | Solution |
+|-------|----------|
+| `Registry not responding` | Check: `curl http://localhost:5000/v2/` Should return `200 OK` or `401 Unauthorized` |
+| `Agent not responding` | Check: `curl http://localhost:8001/agent-card` for plan agent (ports 8001/8002/8003) |
+| `Helm release stuck` | Check: `helm list --namespace pallet` and `kubectl describe pod -n pallet` |
+| `PVC not binding` | Check: `kubectl describe pvc -n pallet` for storage issues |
+
+**Debugging**:
+
+```bash
+# Check cluster status
+kind get clusters                                 # List clusters
+kubectl cluster-info --context kind-pallet-dev   # Cluster details
+
+# Check Helm deployment
+helm list --namespace pallet                      # List releases
+helm status registry --namespace pallet           # Release status
+
+# Check pods
+kubectl get pods -n pallet                        # Pod list
+kubectl logs -n pallet <pod-name>                 # Pod logs
+kubectl describe pod -n pallet <pod-name>         # Pod details
+
+# Test registry
+curl -v http://localhost:5000/v2/                 # Direct API test
+
+# Clean up everything
+bash scripts/kill.sh --kind --clean-logs --clean-pvc
+```
 
 ### Learn More
 

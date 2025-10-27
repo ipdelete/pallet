@@ -26,3 +26,17 @@ tmp/
 # System files
 .DS_Store
 Thumbs.db
+
+# Kubernetes/Kind
+.kube/
+kubeconfig*
+*.secret.yaml
+secrets/
+
+# Docker
+node_modules/
+docker-compose.override.yml
+
+# Helm/K8s temp files
+*.tmp
+*.bak

@@ -1,0 +1,42 @@
+image:
+  repository: registry
+  tag: "2.8.3"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: NodePort
+  port: 5000
+  nodePort: 30500
+  name: registry
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClassName: null
+  mountPath: /var/lib/registry
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+livenessProbe:
+  httpGet:
+    path: /v2/
+    port: 5000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+readinessProbe:
+  httpGet:
+    path: /v2/
+    port: 5000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
